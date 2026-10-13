@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import {
+  ANIMATION_PRESETS,
   ClipPropsPatchSchema,
   CaptionStylePatchSchema,
   ColorSchema,
@@ -352,12 +353,59 @@ export function registerEditingTools(server: McpServer, ctx: ToolContext): void 
     {
       title: 'Set clip properties',
       description:
-        'Change clip properties: transform {x, y (px offset from center), scale, rotation (deg), opacity 0..1}, effects {brightness, contrast, saturation (-1..1), blur (px); null removes}, keyframes per property (clip-relative seconds; [] removes), fadeIn/fadeOut (s), volume/muted, text and style for text clips, words for captions, transitionIn. Only the fields you pass are changed.',
+        'Change clip properties: transform {x, y (px offset from center), scale, rotation (deg), opacity 0..1}, effects {brightness, contrast, saturation (-1..1), blur (px); null removes}, keyframes per property (clip-relative seconds; [] removes), fadeIn/fadeOut (s), volume/muted, text and style for text clips, words for captions, transitionIn, animationIn/animationOut ({preset, duration}; null removes; see animate_clip). Only the fields you pass are changed.',
       inputSchema: z.object({ projectId, clipId: IdSchema, props: ClipPropsPatchSchema }),
     },
     guard(async (args) => {
       const { id, result } = await edit(args.projectId, [
         { type: 'set_clip_props', clipId: args.clipId, props: args.props },
+      ]);
+      return ok(result.summary, editPayload(id, result));
+    }),
+  );
+
+  const presetOrNone = z
+    .enum([...ANIMATION_PRESETS, 'none'])
+    .optional()
+    .describe('Preset name, or "none" to remove; omit to leave unchanged');
+  const seconds = z.number().positive().max(10);
+
+  server.registerTool(
+    'animate_clip',
+    {
+      title: 'Animate clip in/out',
+      description:
+        'Give a visual clip (text, shape, image or video) an entrance ("in") and/or exit ("out") animation preset, without writing keyframes. Presets: "fade" (opacity), "slide-left" / "slide-right" / "slide-up" / "slide-down" (moves in that direction by a quarter of the frame while fading: slide-up enters from below and exits upward), "zoom" (scales from 50% while fading), "pop" (scales up from 30% with a small overshoot). The in animation plays over the first `duration` seconds of the clip, the out animation over the last; they follow the clip when it is trimmed or split and combine with its transform and keyframes. "none" removes an animation.',
+      inputSchema: z
+        .object({
+          projectId,
+          clipId: IdSchema,
+          in: presetOrNone.describe('Entrance preset, or "none" to remove'),
+          out: presetOrNone.describe('Exit preset, or "none" to remove'),
+          duration: seconds
+            .optional()
+            .describe('Seconds for both animations (default 0.5, max 10)'),
+          inDuration: seconds.optional().describe('Seconds for the entrance (overrides duration)'),
+          outDuration: seconds.optional().describe('Seconds for the exit (overrides duration)'),
+        })
+        .refine((a) => a.in !== undefined || a.out !== undefined, {
+          message: 'Give in and/or out (a preset name, or "none" to remove).',
+        }),
+    },
+    guard(async (args) => {
+      const animation = (preset: string | undefined, secs: number | undefined) =>
+        preset === undefined
+          ? undefined
+          : preset === 'none'
+            ? null
+            : { preset, duration: secs ?? args.duration ?? 0.5 };
+      const { id, result } = await edit(args.projectId, [
+        {
+          type: 'set_animation',
+          clipId: args.clipId,
+          in: animation(args.in, args.inDuration),
+          out: animation(args.out, args.outDuration),
+        },
       ]);
       return ok(result.summary, editPayload(id, result));
     }),

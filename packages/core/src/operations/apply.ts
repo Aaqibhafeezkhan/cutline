@@ -10,6 +10,7 @@ import {
   deleteClips,
   deleteRange,
   moveClip,
+  setAnimation,
   setClipProps,
   setTransition,
   setVolume,
@@ -50,6 +51,7 @@ const HANDLERS: { [K in OperationType]: Handler<K> } = {
   delete_range: deleteRange,
   set_clip_props: setClipProps,
   set_transition: setTransition,
+  set_animation: setAnimation,
   set_volume: setVolume,
 };
 

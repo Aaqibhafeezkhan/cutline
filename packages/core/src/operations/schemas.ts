@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import {
   AnimatablePropertySchema,
+  AnimationSchema,
   AssetSchema,
   ColorSchema,
   DurationSchema,
@@ -87,6 +88,8 @@ export const ClipPropsPatchSchema = z
     strokeWidth: z.number().min(0).max(500),
     cornerRadius: z.number().min(0).max(8192),
     transitionIn: TransitionSchema.nullable(),
+    animationIn: AnimationSchema.nullable().describe('Entrance animation; null removes it'),
+    animationOut: AnimationSchema.nullable().describe('Exit animation; null removes it'),
   })
   .partial();
 
@@ -273,6 +276,21 @@ export const SetTransitionOpSchema = z.object({
   transition: TransitionSchema.nullable().describe('null removes the transition'),
 });
 
+export const SetAnimationOpSchema = z
+  .object({
+    type: z.literal('set_animation'),
+    clipId: IdSchema,
+    in: AnimationSchema.nullable()
+      .optional()
+      .describe('Entrance animation over the first `duration` seconds; null removes it'),
+    out: AnimationSchema.nullable()
+      .optional()
+      .describe('Exit animation over the last `duration` seconds; null removes it'),
+  })
+  .refine((o) => o.in !== undefined || o.out !== undefined, {
+    message: 'give in and/or out',
+  });
+
 export const SetVolumeOpSchema = z
   .object({
     type: z.literal('set_volume'),
@@ -306,6 +324,7 @@ export const OperationSchema = z.discriminatedUnion('type', [
   DeleteRangeOpSchema,
   SetClipPropsOpSchema,
   SetTransitionOpSchema,
+  SetAnimationOpSchema,
   SetVolumeOpSchema,
 ]);
 

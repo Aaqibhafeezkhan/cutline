@@ -10,6 +10,7 @@ import {
 import { Textarea } from '@/components/ui/input';
 import { Select, Switch } from '@/components/ui/misc';
 import { useEditor } from '@/lib/store';
+import { AnimationSection } from './AnimationSection';
 import { ColorField, Field, NumberField, Section, SliderField } from './fields';
 
 /** Generic families: the server renderer maps them to matching font files. */
@@ -84,7 +85,12 @@ export function Properties() {
       {(clip.type === 'video' ||
         clip.type === 'image' ||
         clip.type === 'text' ||
-        clip.type === 'shape') && <VisualSection clip={clip} set={set} run={run} />}
+        clip.type === 'shape') && (
+        <>
+          <VisualSection clip={clip} set={set} run={run} />
+          <AnimationSection clip={clip} run={run} />
+        </>
+      )}
       {(clip.type === 'video' || clip.type === 'audio') && (
         <Section title="Audio">
           <SliderField

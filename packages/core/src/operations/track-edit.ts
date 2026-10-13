@@ -73,6 +73,7 @@ export function carveRange(
       const trimmed = sliceClip(clip, end - cStart, clip.duration);
       if ('fadeIn' in trimmed) trimmed.fadeIn = 0;
       if ('transitionIn' in trimmed) delete trimmed.transitionIn;
+      if ('animationIn' in trimmed) delete trimmed.animationIn;
       next.push(trimmed);
       log.modified.push(clip.id);
     }

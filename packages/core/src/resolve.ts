@@ -1,3 +1,4 @@
+import { animationAt, type FrameSize } from './animation';
 import { animatedValue } from './keyframes';
 import { ADJACENT_TOLERANCE, previousAdjacent } from './queries';
 import {
@@ -121,6 +122,7 @@ export function transitionFactor(
 
 function visualLayer(
   assets: Map<string, Asset>,
+  frame: FrameSize,
   track: Track,
   clip: VisualClip,
   t: number,
@@ -130,8 +132,11 @@ function visualLayer(
   const lt = clamp(local, 0, clip.duration);
   const kf = clip.keyframes;
   const base = clip.transform;
+  // Entrance/exit presets: offsets add, scale and opacity multiply (see animation.ts).
+  const anim = animationAt(clip, lt, frame);
   const opacity =
     animatedValue(kf, 'opacity', base.opacity, lt) *
+    anim.opacity *
     factor *
     fadeFactor(lt, clip.duration, clip.fadeIn, clip.fadeOut);
   const layer: VisualLayer = {
@@ -140,9 +145,9 @@ function visualLayer(
     type: clip.type,
     localTime: local,
     transform: {
-      x: animatedValue(kf, 'x', base.x, lt),
-      y: animatedValue(kf, 'y', base.y, lt),
-      scale: animatedValue(kf, 'scale', base.scale, lt),
+      x: animatedValue(kf, 'x', base.x, lt) + anim.dx,
+      y: animatedValue(kf, 'y', base.y, lt) + anim.dy,
+      scale: animatedValue(kf, 'scale', base.scale, lt) * anim.scale,
       rotation: animatedValue(kf, 'rotation', base.rotation, lt),
       opacity: clamp(opacity, 0, 1),
     },
@@ -200,7 +205,7 @@ export function resolveFrame(project: Project, t: number): FrameDescription {
       if (clip.type === 'audio') continue;
       const factor = transitionFactor(track, clip, t);
       if (factor <= 0) continue;
-      layers.push(visualLayer(assets, track, clip, t, factor));
+      layers.push(visualLayer(assets, project.settings, track, clip, t, factor));
     }
   }
   return {

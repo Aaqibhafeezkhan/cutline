@@ -6,6 +6,7 @@ export * from './ranges';
 export * from './queries';
 export * from './validate';
 export * from './keyframes';
+export * from './animation';
 export * from './clipmath';
 export * from './patch';
 export * from './history';

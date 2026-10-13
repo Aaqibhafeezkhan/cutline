@@ -1,12 +1,19 @@
+import { spawnSync } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { applyOperations, createProject, sequentialContext, type Project } from '@cutline/core';
+import {
+  applyOperations,
+  createProject,
+  resolveFrame,
+  sequentialContext,
+  type Project,
+} from '@cutline/core';
 import { Ffmpeg } from '../src/media/ffmpeg';
 import { probeFile } from '../src/media/probe';
 import { fontGroup } from '../src/render/fonts';
 import { buildRenderGraph, wrapText } from '../src/render/graph';
-import { num, piecewise } from '../src/render/expr';
+import { add, isConstant, num, piecewise } from '../src/render/expr';
 import { Renderer } from '../src/render/renderer';
 import { LocalBlobStore } from '../src/storage/local';
 import { FFMPEG, FFPROBE, ffprobe, fixture, hasFfmpeg, hasFixtures, tempDir } from './helpers';
@@ -45,6 +52,7 @@ async function fixtureProject(): Promise<{ project: Project; blobs: LocalBlobSto
           transform: { x: 200, y: -100, scale: 0.3, rotation: 10 },
           effects: { saturation: -1, blur: 2 },
           fadeIn: 0.5,
+          animationIn: { preset: 'zoom', duration: 1 },
           keyframes: {
             x: [
               { time: 0, value: 200 },
@@ -59,6 +67,13 @@ async function fixtureProject(): Promise<{ project: Project; blobs: LocalBlobSto
         start: 0.5,
         duration: 4,
         style: { backgroundColor: '#00000099' },
+        id: 'title',
+      },
+      {
+        type: 'set_animation',
+        clipId: 'title',
+        in: { preset: 'slide-up', duration: 1 },
+        out: { preset: 'pop', duration: 0.5 },
       },
       { type: 'add_captions', cues: [{ start: 0, end: 3, text: 'Server rendered captions' }] },
       { type: 'set_volume', clipId: 'a', volume: 0.5, fadeOut: 0.5 },
@@ -118,6 +133,72 @@ describe('expressions', () => {
 
   it('wraps long text', () => {
     expect(wrapText('one two three four five six', 20, 160)).toBe('one two three\nfour five six');
+  });
+
+  it('adds piecewise functions and detects constants', () => {
+    const ramp = [
+      { t: 0, v: 0 },
+      { t: 2, v: 10 },
+    ];
+    expect(add([], ramp)).toEqual(ramp);
+    expect(add(ramp, [])).toEqual(ramp);
+    expect(add(ramp, [{ t: 1, v: 1 }])).toEqual([
+      { t: 0, v: 1 },
+      { t: 1, v: 6 },
+      { t: 2, v: 11 },
+    ]);
+    expect(isConstant([])).toBe(true);
+    expect(isConstant([{ t: 0, v: 1 }])).toBe(true);
+    expect(isConstant(ramp)).toBe(false);
+  });
+});
+
+/** A red square on black that slides in from the right and zooms out. */
+function animatedSquare(): Project {
+  const ctx = sequentialContext();
+  const project = createProject({ name: 'Anim', settings: { width: 640, height: 360 } }, ctx);
+  return applyOperations(
+    project,
+    [
+      {
+        type: 'add_shape',
+        start: 0,
+        duration: 3,
+        width: 80,
+        height: 80,
+        fill: '#ff0000',
+        id: 'sq',
+      },
+      {
+        type: 'set_animation',
+        clipId: 'sq',
+        in: { preset: 'slide-left', duration: 1 },
+        out: { preset: 'zoom', duration: 1 },
+      },
+      { type: 'add_text', text: 'Animated', start: 0, duration: 3, transform: { y: 120 }, id: 't' },
+      { type: 'set_animation', clipId: 't', in: { preset: 'pop', duration: 1 } },
+    ],
+    ctx,
+  ).project;
+}
+
+describe('animation presets in the filtergraph', () => {
+  it('turns presets into per-frame position, scale, size and alpha expressions', () => {
+    const graph = buildRenderGraph(animatedSquare(), new Map(), {
+      start: 0,
+      end: 3,
+      width: 640,
+      height: 360,
+      fps: 30,
+      includeAudio: false,
+      textFile: () => 'x.txt',
+    });
+    // Shape: animated overlay x, per-frame scale (zoom out) and alpha.
+    expect(graph.filter).toMatch(/overlay=x='\(320\+1\*\(if\(lt\(t,0\)/);
+    expect(graph.filter).toContain(':eval=frame');
+    expect(graph.filter).toContain("a='alpha(X,Y)*(");
+    // Text: pop scales the font size per frame.
+    expect(graph.filter).toMatch(/fontsize='max\(1,72\*\(if\(lt\(t,0\),0\.3/);
   });
 });
 
@@ -181,4 +262,43 @@ describe.runIf(hasFfmpeg && hasFixtures)('server renderer (ffmpeg)', () => {
       expect(f.length).toBeGreaterThan(2000);
     }
   }, 60_000);
+
+  it('renders animation presets where the resolver puts them', async () => {
+    const project = animatedSquare();
+    const blobs = new LocalBlobStore(await tempDir());
+    // Mid-entrance (slide + fade), at rest, mid-exit (zoom).
+    const times = [0.5, 1.5, 2.5];
+    const frames = await new Renderer(ffmpeg, blobs).frames(project, times, 640);
+    frames.forEach((jpeg, i) => {
+      if (process.env.CUTLINE_TEST_ARTIFACTS) {
+        writeFileSync(join(process.env.CUTLINE_TEST_ARTIFACTS, `anim-${times[i]}.jpg`), jpeg);
+      }
+      const layer = resolveFrame(project, times[i]!).layers.find((l) => l.clipId === 'sq')!;
+      const red = redBox(jpeg, 640, 360);
+      // Same motion as the browser engine, within JPEG/anti-aliasing tolerance.
+      expect(Math.abs(red.cx - (320 + layer.transform.x))).toBeLessThan(3);
+      expect(Math.abs(red.width - 80 * layer.transform.scale)).toBeLessThan(4);
+    });
+  }, 60_000);
 });
+
+/** Bounding box of saturated red pixels in a decoded frame. */
+function redBox(jpeg: Buffer, w: number, h: number): { cx: number; width: number } {
+  const raw = spawnSync(
+    FFMPEG,
+    ['-v', 'error', '-i', 'pipe:0', '-f', 'rawvideo', '-pix_fmt', 'rgb24', 'pipe:1'],
+    { input: jpeg, maxBuffer: 64 * 1024 * 1024, windowsHide: true },
+  ).stdout;
+  let minX = w;
+  let maxX = -1;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const i = (y * w + x) * 3;
+      if (raw[i]! > 110 && raw[i + 1]! < 70 && raw[i + 2]! < 70) {
+        minX = Math.min(minX, x);
+        maxX = Math.max(maxX, x);
+      }
+    }
+  }
+  return { cx: (minX + maxX + 1) / 2, width: maxX - minX + 1 };
+}

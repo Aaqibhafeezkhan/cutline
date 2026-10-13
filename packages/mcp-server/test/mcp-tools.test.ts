@@ -63,6 +63,7 @@ describe('tool catalogue', () => {
         'add_template',
         'add_text_overlay',
         'add_transition',
+        'animate_clip',
         'apply_operations',
         'create_project',
         'delete_clip',
@@ -114,6 +115,22 @@ describe('editing via MCP', () => {
       clipId: split.newClipId,
       props: { transform: { y: 200 }, fadeIn: 0.2 },
     });
+    const animated = await okCall('animate_clip', {
+      clipId: text.clipId,
+      in: 'slide-up',
+      out: 'pop',
+      duration: 0.3,
+      outDuration: 0.2,
+    });
+    expect(animated.summary).toBe(`Clip ${String(text.clipId)}: in slide-up 0.3s, out pop 0.2s.`);
+    const removedAnim = await okCall('animate_clip', { clipId: text.clipId, out: 'none' });
+    expect(removedAnim.summary).toMatch(/removed the out animation/);
+    const tooLong = await call('animate_clip', { clipId: text.clipId, in: 'fade', duration: 5 });
+    expect(JSON.stringify(tooLong.content)).toMatch(
+      /does not fit.*Hint: Use a duration of at most/,
+    );
+    const nothing = await call('animate_clip', { clipId: text.clipId });
+    expect(nothing.isError).toBe(true);
     await okCall('add_transition', { clipId: split.newClipId, type: 'crossfade', duration: 0.5 });
     await okCall('add_transition', { clipId: split.newClipId, type: 'none' });
     const del = await okCall('delete_clip', { clipIds: [split.newClipId] });

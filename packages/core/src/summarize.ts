@@ -17,6 +17,8 @@ export interface ClipSummary {
   volume?: number;
   muted?: boolean;
   transitionIn?: string;
+  /** Entrance/exit presets, e.g. "in fade 0.5s, out slide-left 0.5s". */
+  animation?: string;
   effects?: string[];
   animated?: string[];
 }
@@ -42,6 +44,11 @@ function summarizeClip(clip: Clip, assetNames: Map<string, string>): ClipSummary
   if (clip.type !== 'audio' && clip.type !== 'caption') {
     if (clip.transitionIn)
       s.transitionIn = `${clip.transitionIn.type} ${clip.transitionIn.duration}s`;
+    const anim = [
+      clip.animationIn && `in ${clip.animationIn.preset} ${clip.animationIn.duration}s`,
+      clip.animationOut && `out ${clip.animationOut.preset} ${clip.animationOut.duration}s`,
+    ].filter(Boolean);
+    if (anim.length) s.animation = anim.join(', ');
     const fx = Object.keys(clip.effects);
     if (fx.length) s.effects = fx;
   }
