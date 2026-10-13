@@ -1,0 +1,15 @@
+**/node_modules
+**/dist
+**/coverage
+**/.turbo
+**/test-results
+**/playwright-report
+.cutline-data
+fixtures/media
+media
+.git
+.github
+.claude
+.env
+.env.*
+*.log

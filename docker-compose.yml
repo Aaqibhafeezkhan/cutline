@@ -1,0 +1,24 @@
+# Self-hosted Cutline: editor UI + MCP server on http://localhost:4100
+#
+#   docker compose up --build
+#
+# Put media you want agents to import into ./media (mounted read-only at /media),
+# then e.g. ask: "add_asset path=/media/talk.mp4".
+services:
+  cutline:
+    build: .
+    image: cutline:local
+    ports:
+      # Bound to localhost only. To expose it, set CUTLINE_TOKEN and CUTLINE_ALLOWED_HOSTS first.
+      - '127.0.0.1:4100:4100'
+    volumes:
+      - cutline-data:/data
+      - ./media:/media:ro
+    environment:
+      CUTLINE_TOKEN: ${CUTLINE_TOKEN:-}
+      CUTLINE_ALLOWED_HOSTS: ${CUTLINE_ALLOWED_HOSTS:-}
+      CUTLINE_PUBLIC_URL: ${CUTLINE_PUBLIC_URL:-http://localhost:4100}
+    restart: unless-stopped
+
+volumes:
+  cutline-data:

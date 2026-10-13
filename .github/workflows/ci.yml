@@ -34,6 +34,29 @@ jobs:
       - run: pnpm test
       - run: pnpm build
 
+  docker:
+    name: Docker image
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build -t cutline:ci .
+      - name: Start container and check health + editor
+        run: |
+          docker run -d --name cutline -p 127.0.0.1:4100:4100 cutline:ci
+          for i in $(seq 1 30); do
+            curl -fsS http://localhost:4100/api/health && break
+            sleep 2
+          done
+          curl -fsS http://localhost:4100/api/health | grep -q '"ffmpeg":"'
+          curl -fsS http://localhost:4100/ | grep -q '<div id="root">'
+          curl -fsS -X POST -H 'content-type: application/json' \
+            -d '{"name":"Docker smoke"}' http://localhost:4100/api/projects | grep -q '"proj_'
+      - name: Container logs
+        if: always()
+        run: docker logs cutline || true
+
   e2e:
     name: Playwright smoke test
     runs-on: ubuntu-latest
