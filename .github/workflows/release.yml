@@ -15,7 +15,7 @@ jobs:
     name: GitHub Release
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Extract release notes from CHANGELOG.md
         run: |
           version="${GITHUB_REF_NAME#v}"
