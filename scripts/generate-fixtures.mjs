@@ -51,20 +51,21 @@ const fixtures = {
     '-movflags',
     '+faststart',
   ],
-  // Three 2 s solid-color shots: hard cuts at 2 s and 4 s. Used by scene detection tests.
+  // Three 2 s shots with different content (test pattern, Mandelbrot zoom, HD bars):
+  // hard cuts at 2 s and 4 s. Used by scene detection tests.
   'scenes-6s.mp4': [
     '-f',
     'lavfi',
     '-i',
-    'color=c=0xd03030:size=640x360:rate=30:duration=2',
+    'testsrc2=size=640x360:rate=30:duration=2',
     '-f',
     'lavfi',
     '-i',
-    'color=c=0x30a050:size=640x360:rate=30:duration=2',
+    'mandelbrot=size=640x360:rate=30,trim=duration=2',
     '-f',
     'lavfi',
     '-i',
-    'color=c=0x3050d0:size=640x360:rate=30:duration=2',
+    'smptehdbars=size=640x360:rate=30:duration=2',
     '-filter_complex',
     '[0:v][1:v][2:v]concat=n=3:v=1:a=0[v]',
     '-map',
