@@ -11,6 +11,7 @@ import { Circle, Magnet, Minus, Plus, Scissors, Square, Trash2, Type } from 'luc
 import { clipEnd, projectDuration, type Clip, type Track } from '@cutline/core';
 import { Button } from '@/components/ui/button';
 import { Tooltip } from '@/components/ui/misc';
+import { useBeatSync, useBeats } from '@/lib/beats';
 import { seek } from '@/lib/player-bridge';
 import { useEditor, usePlayhead } from '@/lib/store';
 import { cn, formatTimecode } from '@/lib/utils';
@@ -21,6 +22,7 @@ import {
   HEADER_WIDTH,
   RULER_HEIGHT,
   SNAP_PX,
+  beatPoints,
   TRACK_HEIGHT,
   displayTracks,
   snap,
@@ -54,6 +56,7 @@ export function Timeline() {
   const [drag, setDrag] = useState<DragState | null>(null);
   const scroller = useRef<HTMLDivElement>(null);
   const lanes = useRef<HTMLDivElement>(null);
+  useBeatSync();
 
   const tracks = useMemo(() => (project ? displayTracks(project) : []), [project]);
   const duration = project ? projectDuration(project) : 0;
@@ -129,7 +132,14 @@ export function Timeline() {
       Math.abs(e.clientX - drag.originX) > 3 ||
       Math.abs(e.clientY - drag.originY) > 3;
     if (!moved) return;
-    const points = snapping ? snapPoints(project, [drag.clip.id], usePlayhead.getState().time) : [];
+    const points = snapping
+      ? snapPoints(
+          project,
+          [drag.clip.id],
+          usePlayhead.getState().time,
+          beatPoints(project, useBeats.getState().byAsset, [drag.clip.id]),
+        )
+      : [];
     const threshold = SNAP_PX / zoom;
     const c = drag.clip;
     const asset = 'assetId' in c ? project.assets.find((a) => a.id === c.assetId) : undefined;

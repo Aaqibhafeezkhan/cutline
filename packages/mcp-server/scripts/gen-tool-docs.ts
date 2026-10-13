@@ -55,6 +55,7 @@ const GROUPS: Record<string, string[]> = {
     'detect_scenes',
     'get_waveform_summary',
   ],
+  Music: ['detect_beats', 'cut_to_beats'],
   Audio: ['duck_music', 'normalize_loudness'],
   Output: ['render_preview', 'export_video'],
 };

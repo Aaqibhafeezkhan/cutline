@@ -6,6 +6,7 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
 import {
   CutlineError,
+  findAsset,
   isCutlineError,
   summarizeProject,
   wordsToCues,
@@ -296,6 +297,22 @@ export function createApp(services: Services): AppHandle {
       res.sendFile(resolve(path), { acceptRanges: true, dotfiles: 'allow' }, (err) => {
         if (err && !res.headersSent) sendError(res, err);
       });
+    }),
+  );
+
+  // Beat grid of an asset in source time: GET returns an earlier result (or null), POST analyses.
+  const beatAsset = async (req: Request) =>
+    findAsset((await docs.get(param(req, 'id'))).project, param(req, 'assetId'));
+  api.get(
+    '/projects/:id/assets/:assetId/beats',
+    route(async (req, res) => {
+      res.json({ beats: await services.analysis.cachedBeats(await beatAsset(req)) });
+    }),
+  );
+  api.post(
+    '/projects/:id/assets/:assetId/beats',
+    route(async (req, res) => {
+      res.json({ beats: await services.analysis.beats(await beatAsset(req)) });
     }),
   );
 

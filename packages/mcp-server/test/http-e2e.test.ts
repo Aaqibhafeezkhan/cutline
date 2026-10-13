@@ -148,6 +148,17 @@ describe.runIf(hasFfmpeg && hasFixtures)('MCP over Streamable HTTP + live sync',
     expect(range.status).toBe(206);
     expect(range.body.length).toBe(100);
 
+    // Beat grids: GET only returns earlier results, POST analyses and caches.
+    const beatsUrl = `${server.url}/api/projects/${projectId}/assets/${music.id}/beats`;
+    expect(await (await fetch(beatsUrl)).json()).toEqual({ beats: null });
+    const analysed = (await (await fetch(beatsUrl, { method: 'POST' })).json()) as {
+      beats: { duration: number };
+    };
+    expect(analysed.beats.duration).toBeCloseTo(3, 1);
+    expect(await (await fetch(beatsUrl)).json()).toEqual(analysed);
+    const imageBeats = await fetch(beatsUrl.replace(music.id, image.id));
+    expect(await imageBeats.json()).toEqual({ beats: null });
+
     const exported = await tool('export_video', { quality: 'draft' });
     expect(exported.url).toMatch(/\/api\/projects\/.+\/exports\/.+\.mp4$/);
     expect(

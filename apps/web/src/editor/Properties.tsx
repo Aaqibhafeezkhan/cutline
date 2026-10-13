@@ -17,6 +17,7 @@ import { Select, Switch } from '@/components/ui/misc';
 import { api } from '@/lib/api';
 import { useEditor } from '@/lib/store';
 import { AnimationSection } from './AnimationSection';
+import { BeatsSection } from './BeatsSection';
 import { ColorField, Field, NumberField, Section, SliderField } from './fields';
 
 /** Generic families: the server renderer maps them to matching font files. */
@@ -100,6 +101,7 @@ export function Properties() {
       {(clip.type === 'video' || clip.type === 'audio') && (
         <AudioSection clip={clip} trackId={track.id} set={set} run={run} />
       )}
+      {(clip.type === 'video' || clip.type === 'audio') && <BeatsSection clip={clip} />}
       {clip.type !== 'caption' && (
         <Section title="Fades">
           <NumberField

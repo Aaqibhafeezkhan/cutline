@@ -21,6 +21,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   limit.
 - "Duck under speech" and "Normalize loudness" buttons in the Audio section of the properties
   panel (REST: `POST /api/projects/:id/audio/duck` and `/audio/normalize`).
+- **Beat detection and cutting on the beat**: a pure-TypeScript beat tracker (spectral-flux onset
+  envelope, autocorrelation tempo estimate with an 80–160 BPM preference, dynamic-programming beat
+  grid, downbeats when clear) with results cached per asset. New MCP tools `detect_beats` (BPM,
+  confidence, beat and downbeat times in asset and timeline seconds) and `cut_to_beats` (lays the
+  main video track's clips, or the given clips, back-to-back so every cut lands on every Nth beat,
+  as one undo step built from `move_clip`/`trim_clip`). The editor shows beat ticks on clips whose
+  beats are known, snaps timeline drags to them, and has a "Detect beats" button for audio and
+  video clips (new REST route `GET`/`POST /api/projects/:id/assets/:assetId/beats`). New synthetic
+  fixture `clicks-120bpm-8s.wav`.
 - **Remove filler words**: the new `remove_filler_words` MCP tool transcribes the timeline, finds
   hesitations ("um", "uh", "er", "hmm", "äh", "ähm", "öhm", … — case and punctuation are ignored)
   and cuts them with a single ripple `delete_range` (one undo step). `dryRun` previews the cuts,
