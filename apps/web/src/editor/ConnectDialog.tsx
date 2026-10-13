@@ -44,7 +44,11 @@ export function ConnectDialog({
       mcpServers: {
         cutline: {
           command: 'node',
-          args: ['/ABSOLUTE/PATH/TO/cutline/packages/mcp-server/dist/cli.js', '--stdio'],
+          args: [
+            '/ABSOLUTE/PATH/TO/cutline/packages/mcp-server/dist/cli.js',
+            '--stdio',
+            '--serve-web',
+          ],
         },
       },
     },
