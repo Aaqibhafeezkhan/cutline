@@ -8,7 +8,8 @@ import {
 } from '../src';
 import { baseProject, run } from './helpers';
 
-const KINDS = Object.keys(TEMPLATE_LABELS) as TemplateKind[];
+// The logo template places an image instead of shapes and text (see brand.test.ts).
+const KINDS = (Object.keys(TEMPLATE_LABELS) as TemplateKind[]).filter((k) => k !== 'logo');
 
 describe('templates', () => {
   it.each(KINDS)('%s expands into shapes and text that apply cleanly', (template) => {

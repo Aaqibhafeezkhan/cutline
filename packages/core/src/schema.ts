@@ -23,12 +23,44 @@ export const ColorSchema = z
 // Project settings and assets
 // ---------------------------------------------------------------------------
 
+export const BRAND_COLOR_KEYS = ['primary', 'secondary', 'accent', 'text', 'background'] as const;
+export const BrandColorKeySchema = z.enum(BRAND_COLOR_KEYS);
+
+export const LOGO_POSITIONS = ['top-left', 'top-right', 'bottom-left', 'bottom-right'] as const;
+export const LogoPositionSchema = z.enum(LOGO_POSITIONS);
+
+export const BrandColorsSchema = z.object({
+  primary: ColorSchema.optional().describe('Main brand color: template bars, new shape fills'),
+  secondary: ColorSchema.optional().describe('Second brand color'),
+  accent: ColorSchema.optional().describe('Highlight color: outlines, accent lines, callouts'),
+  text: ColorSchema.optional().describe('Default color of new text'),
+  background: ColorSchema.optional().describe('Background color for branded backdrops'),
+});
+
+/**
+ * The project's brand kit: defined once, picked up by templates and by new
+ * text/shapes whenever the caller does not set a color or font explicitly.
+ */
+export const BrandSchema = z.object({
+  colors: BrandColorsSchema.prefault({}),
+  fontFamily: z.string().min(1).max(200).optional().describe('Body font family'),
+  headingFontFamily: z
+    .string()
+    .min(1)
+    .max(200)
+    .optional()
+    .describe('Font family for headings (default: fontFamily)'),
+  logoAssetId: IdSchema.nullable().optional().describe('Image asset used as the logo'),
+  logoPosition: LogoPositionSchema.optional().describe('Corner for the logo (default top-right)'),
+});
+
 export const ProjectSettingsSchema = z.object({
   width: z.number().int().min(16).max(7680).default(1920).describe('Output width in pixels'),
   height: z.number().int().min(16).max(4320).default(1080).describe('Output height in pixels'),
   fps: z.number().positive().max(240).default(30).describe('Frames per second'),
   backgroundColor: ColorSchema.default('#000000'),
   sampleRate: z.union([z.literal(44100), z.literal(48000)]).default(48000),
+  brand: BrandSchema.optional().describe('Brand kit: colors, fonts and logo'),
 });
 
 export const AssetKindSchema = z.enum(['video', 'audio', 'image']);
@@ -312,6 +344,10 @@ export const ProjectSchema = z.object({
 // ---------------------------------------------------------------------------
 
 export type ProjectSettings = z.output<typeof ProjectSettingsSchema>;
+export type Brand = z.output<typeof BrandSchema>;
+export type BrandColors = z.output<typeof BrandColorsSchema>;
+export type BrandColorKey = z.output<typeof BrandColorKeySchema>;
+export type LogoPosition = z.output<typeof LogoPositionSchema>;
 export type Asset = z.output<typeof AssetSchema>;
 export type AssetKind = z.output<typeof AssetKindSchema>;
 export type Transform = z.output<typeof TransformSchema>;

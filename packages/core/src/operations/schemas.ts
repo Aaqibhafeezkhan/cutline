@@ -7,6 +7,7 @@ import {
   DurationSchema,
   IdSchema,
   KeyframeSchema,
+  LogoPositionSchema,
   ProjectSettingsSchema,
   ShapeKindSchema,
   TimeSchema,
@@ -192,12 +193,75 @@ export const AddShapeOpSchema = z.object({
   duration: DurationSchema.default(3),
   width: z.number().positive().max(16384).optional().describe('Pixels (default 400)'),
   height: z.number().positive().max(16384).optional().describe('Pixels (default 200)'),
-  fill: ColorSchema.nullable().optional().describe('Default white; null = outline only'),
-  strokeColor: ColorSchema.optional(),
+  fill: ColorSchema.nullable()
+    .optional()
+    .describe('Default: brand-kit primary color, else white; null = outline only'),
+  strokeColor: ColorSchema.optional().describe('Default: brand-kit accent color, else black'),
   strokeWidth: z.number().min(0).max(500).optional(),
   cornerRadius: z.number().min(0).max(8192).optional(),
   trackId: IdSchema.optional().describe('Video track (default: an overlay track on top)'),
   transform: TransformPatchSchema.optional(),
+  mode: PlacementModeSchema,
+  id: IdSchema.optional(),
+});
+
+export const BrandColorsPatchSchema = z
+  .object({
+    primary: ColorSchema.nullable().describe('Template bars and new shape fills'),
+    secondary: ColorSchema.nullable(),
+    accent: ColorSchema.nullable().describe('Accent lines and outlines'),
+    text: ColorSchema.nullable().describe('Default color of new text'),
+    background: ColorSchema.nullable(),
+  })
+  .partial()
+  .describe('Brand colors to set (#RRGGBB); null clears one');
+
+export const SetBrandOpSchema = z.object({
+  type: z.literal('set_brand'),
+  colors: BrandColorsPatchSchema.optional(),
+  fontFamily: z
+    .string()
+    .min(1)
+    .max(200)
+    .nullable()
+    .optional()
+    .describe('Body font family, e.g. "Georgia, serif"; null clears it'),
+  headingFontFamily: z
+    .string()
+    .min(1)
+    .max(200)
+    .nullable()
+    .optional()
+    .describe('Heading font family (default: fontFamily); null clears it'),
+  logoAssetId: IdSchema.nullable().optional().describe('Image asset to use as logo; null clears'),
+  logoPosition: LogoPositionSchema.nullable().optional().describe('Logo corner; null clears'),
+  reset: z.boolean().default(false).describe('Clear the whole brand kit before applying'),
+});
+
+export const AddLogoOpSchema = z.object({
+  type: z.literal('add_logo'),
+  assetId: IdSchema.optional().describe('Image asset (default: the brand-kit logo)'),
+  start: TimeSchema.default(0),
+  duration: DurationSchema.optional().describe(
+    'Seconds (default: until the end of the timeline, at least 5)',
+  ),
+  position: LogoPositionSchema.optional().describe(
+    'Corner (default: brand-kit logoPosition, else top-right)',
+  ),
+  size: z
+    .number()
+    .min(0.02)
+    .max(1)
+    .default(0.12)
+    .describe('Logo height as a fraction of the canvas height (default 0.12)'),
+  margin: z
+    .number()
+    .min(0)
+    .max(0.4)
+    .default(0.04)
+    .describe('Distance from the edges as a fraction of the canvas height (default 0.04)'),
+  opacity: z.number().min(0).max(1).default(1),
+  trackId: IdSchema.optional().describe('Video track (default: a logo track on top)'),
   mode: PlacementModeSchema,
   id: IdSchema.optional(),
 });
@@ -356,6 +420,8 @@ export const OperationSchema = z.discriminatedUnion('type', [
   SetAnimationOpSchema,
   SetVolumeOpSchema,
   DuckAudioOpSchema,
+  SetBrandOpSchema,
+  AddLogoOpSchema,
 ]);
 
 export type Operation = z.output<typeof OperationSchema>;

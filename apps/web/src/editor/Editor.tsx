@@ -9,6 +9,7 @@ import { ActivityFeed } from './ActivityFeed';
 import { AssetBin } from './AssetBin';
 import { CaptionsPanel } from './CaptionsPanel';
 import { addText, deleteSelection, nudgeSelection, selectAll, splitAtPlayhead } from './commands';
+import { BrandKitDialog } from './BrandKitDialog';
 import { ConnectDialog } from './ConnectDialog';
 import { ExportDialog } from './ExportDialog';
 import { Preview } from './Preview';
@@ -59,6 +60,7 @@ export function Editor({ projectId }: { projectId: string }) {
   const [exportOpen, setExportOpen] = useState(false);
   const [connectOpen, setConnectOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [brandOpen, setBrandOpen] = useState(false);
 
   useEffect(() => {
     useEditor.getState().open(projectId);
@@ -89,6 +91,7 @@ export function Editor({ projectId }: { projectId: string }) {
         onExport={() => setExportOpen(true)}
         onConnect={() => setConnectOpen(true)}
         onShortcuts={() => setHelpOpen(true)}
+        onBrand={() => setBrandOpen(true)}
       />
       <div className="grid min-h-0 grid-cols-[260px_minmax(0,1fr)_300px]">
         <aside className="min-h-0 border-r border-border bg-surface">
@@ -122,6 +125,7 @@ export function Editor({ projectId }: { projectId: string }) {
       <ExportDialog open={exportOpen} onOpenChange={setExportOpen} />
       <ConnectDialog open={connectOpen} onOpenChange={setConnectOpen} />
       <ShortcutsDialog open={helpOpen} onOpenChange={setHelpOpen} />
+      <BrandKitDialog open={brandOpen} onOpenChange={setBrandOpen} />
     </div>
   );
 }

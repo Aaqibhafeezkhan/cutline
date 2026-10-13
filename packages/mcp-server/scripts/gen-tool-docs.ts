@@ -41,6 +41,7 @@ const GROUPS: Record<string, string[]> = {
     'add_text_overlay',
     'add_shape',
     'add_template',
+    'set_brand_kit',
     'add_captions',
     'add_transition',
     'set_audio_volume',

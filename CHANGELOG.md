@@ -37,6 +37,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   never reaches into neighbouring words. The editor's captions panel has a matching "Remove
   fillers" button; core exports the pure `findFillerRanges` helper. Whisper often leaves
   disfluencies out of its transcript, so only fillers it wrote down can be found.
+- **Brand kit**: an optional `brand` in the project settings holds colors (primary, secondary,
+  accent, text, background), a body and a heading font family, and a logo image with its corner.
+  The new `set_brand` operation and `set_brand_kit` MCP tool merge partial updates (`null` clears a
+  field, `reset` starts over) and check that the logo is an image asset. Templates, `add_text` and
+  `add_shape` use the brand colors and fonts whenever the caller does not pass explicit ones. The
+  new `add_logo` operation and `logo` template (via `add_template`) place the logo in a corner with
+  a margin, by default for the whole timeline. The editor has a Brand kit dialog in the top bar
+  (color pickers, font selects, logo picker, "Add logo to video"), and the Add menu previews the
+  brand colors. `get_project` summaries include the brand kit.
 
 ## [0.2.0] - 2026-10-13
 

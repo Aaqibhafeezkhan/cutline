@@ -3,6 +3,7 @@ import { VERSION } from '../version';
 import type { Services } from '../services';
 import { ToolContext, type SessionInfo } from './context';
 import { registerAudioTools } from './tools/audio';
+import { registerBrandTools } from './tools/brand';
 import { registerEditingTools } from './tools/editing';
 import { registerMusicTools } from './tools/music';
 import { registerOutputTools } from './tools/output';
@@ -19,6 +20,7 @@ How to work:
 - To cut to music: cut_to_beats lays the footage out so every cut lands on a beat (detect_beats shows tempo and beat times).
 - To add subtitles: add_captions with fromTranscript=true (do this AFTER cutting, so captions match the final timing).
 - For background music: duck_music lowers it under speech; normalize_loudness evens out clip levels (-14 LUFS by default).
+- For on-brand graphics: set_brand_kit once (colors, fonts, logo), then add_template / add_text_overlay / add_shape use it by default; add_template with template "logo" places the logo.
 - To check your work: get_frames (look at stills), get_waveform_summary, get_transcript.
 - Finish with export_video (server-side MP4) and give the user the download URL.
 - Everything is undoable (undo/redo), including the human's edits. apply_operations batches many edits into one undo step.
@@ -32,6 +34,7 @@ export function createMcpServer(services: Services, session: SessionInfo): McpSe
   );
   const ctx = new ToolContext(services, server, session);
   registerEditingTools(server, ctx);
+  registerBrandTools(server, ctx);
   registerPerceptionTools(server, ctx);
   registerMusicTools(server, ctx);
   registerOutputTools(server, ctx);

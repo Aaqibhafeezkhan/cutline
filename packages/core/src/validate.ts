@@ -28,6 +28,10 @@ export function findProblems(project: Project): string[] {
 
   const assets = new Map(project.assets.map((a) => [a.id, a]));
   for (const asset of project.assets) seen(asset.id, 'asset');
+  const logoId = project.settings.brand?.logoAssetId;
+  if (logoId && assets.get(logoId)?.kind !== 'image') {
+    problems.push(`brand: logo ${logoId} is not an image asset of this project`);
+  }
 
   for (const track of project.tracks) {
     seen(track.id, 'track');

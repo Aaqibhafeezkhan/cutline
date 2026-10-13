@@ -6,6 +6,7 @@ import { toJsonPatch, type JsonPatchOperation } from '../patch';
 import type { Project } from '../schema';
 import { assertValid } from '../validate';
 import { duckAudio } from './audio';
+import { addLogo, setBrand } from './brand';
 import {
   addClip,
   deleteClips,
@@ -55,6 +56,8 @@ const HANDLERS: { [K in OperationType]: Handler<K> } = {
   set_animation: setAnimation,
   set_volume: setVolume,
   duck_audio: duckAudio,
+  set_brand: setBrand,
+  add_logo: addLogo,
 };
 
 export function parseOperation(input: unknown): Operation {

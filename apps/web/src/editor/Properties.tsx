@@ -19,13 +19,7 @@ import { useEditor } from '@/lib/store';
 import { AnimationSection } from './AnimationSection';
 import { BeatsSection } from './BeatsSection';
 import { ColorField, Field, NumberField, Section, SliderField } from './fields';
-
-/** Generic families: the server renderer maps them to matching font files. */
-const FONT_FAMILIES = [
-  { value: 'sans-serif', label: 'Sans serif' },
-  { value: 'serif', label: 'Serif' },
-  { value: 'monospace', label: 'Monospace' },
-];
+import { FONT_FAMILIES } from './fonts';
 
 function findClip(id: string | undefined) {
   const project = useEditor.getState().project;
