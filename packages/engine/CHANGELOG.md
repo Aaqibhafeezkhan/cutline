@@ -1,5 +1,12 @@
 # @cutline/engine
 
+## 0.3.0
+
+### Patch Changes
+
+- Updated dependencies [[`5c1f710`](https://github.com/Aepzie/cutline/commit/5c1f7105c07d2d1c87a49e7b65686d924a2cd47b), [`6099b04`](https://github.com/Aepzie/cutline/commit/6099b048fd7a724984c2938b2291d053ec41b4a9), [`b200a77`](https://github.com/Aepzie/cutline/commit/b200a7773f89ef01f6045d9048fd3b2900ca7ebc)]:
+  - @cutline/core@0.3.0
+
 ## 0.2.0
 
 ### Minor Changes

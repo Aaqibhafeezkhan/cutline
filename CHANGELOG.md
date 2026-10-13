@@ -7,20 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-13
+
+Audio and branding: remove filler words, detect beats and cut on the beat, duck music under
+speech, normalize loudness, and define a brand kit once per project. Agents get six new MCP tools;
+as before, the browser engine and the server renderer produce the same result.
+
 ### Added
 
-- **Auto-ducking**: background music gets quieter automatically while someone speaks. The new
-  `duck_music` MCP tool finds speech on the voice track(s) (cached transcript word timings, or
-  non-silent ranges) and picks the music track by itself when it can; the new `duck_audio`
-  operation stores a clip-relative ducking envelope (`amountDb`, `attack`, `release`) that the
-  resolver turns into gain points, so the browser engine and the ffmpeg renderer both follow it
-  and it survives trims, splits and ripple cuts. Re-running replaces the previous ducking.
-- **Loudness normalization**: the new `normalize_loudness` MCP tool measures EBU R128 integrated
-  loudness and true peak per clip with ffmpeg `ebur128` (cached per asset range) and sets clip
-  volumes to hit a LUFS target (default -14), capped by a true-peak ceiling and the ×4 volume
-  limit.
-- "Duck under speech" and "Normalize loudness" buttons in the Audio section of the properties
-  panel (REST: `POST /api/projects/:id/audio/duck` and `/audio/normalize`).
+- **Remove filler words**: the new `remove_filler_words` MCP tool transcribes the timeline, finds
+  hesitations ("um", "uh", "er", "hmm", "äh", "ähm", "öhm", … — case and punctuation are ignored)
+  and cuts them with a single ripple `delete_range` (one undo step). `dryRun` previews the cuts,
+  `fillers` replaces the word list, `repeats` also removes stutters like "I I think", and padding
+  never reaches into neighbouring words. The editor's captions panel has a matching "Remove
+  fillers" button; core exports the pure `findFillerRanges` helper. Whisper often leaves
+  disfluencies out of its transcript, so only fillers it wrote down can be found.
 - **Beat detection and cutting on the beat**: a pure-TypeScript beat tracker (spectral-flux onset
   envelope, autocorrelation tempo estimate with an 80–160 BPM preference, dynamic-programming beat
   grid, downbeats when clear) with results cached per asset. New MCP tools `detect_beats` (BPM,
@@ -30,13 +31,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   beats are known, snaps timeline drags to them, and has a "Detect beats" button for audio and
   video clips (new REST route `GET`/`POST /api/projects/:id/assets/:assetId/beats`). New synthetic
   fixture `clicks-120bpm-8s.wav`.
-- **Remove filler words**: the new `remove_filler_words` MCP tool transcribes the timeline, finds
-  hesitations ("um", "uh", "er", "hmm", "äh", "ähm", "öhm", … — case and punctuation are ignored)
-  and cuts them with a single ripple `delete_range` (one undo step). `dryRun` previews the cuts,
-  `fillers` replaces the word list, `repeats` also removes stutters like "I I think", and padding
-  never reaches into neighbouring words. The editor's captions panel has a matching "Remove
-  fillers" button; core exports the pure `findFillerRanges` helper. Whisper often leaves
-  disfluencies out of its transcript, so only fillers it wrote down can be found.
+- **Auto-ducking**: background music gets quieter automatically while someone speaks. The new
+  `duck_music` MCP tool finds speech on the voice track(s) (cached transcript word timings, or
+  non-silent ranges) and picks the music track by itself when it can; the new `duck_audio`
+  operation stores a clip-relative ducking envelope (`amountDb`, `attack`, `release`) that the
+  resolver turns into gain points, so the browser engine and the ffmpeg renderer both follow it
+  and it survives trims, splits and ripple cuts. Re-running replaces the previous ducking.
+- **Loudness normalization**: the new `normalize_loudness` MCP tool measures EBU R128 integrated
+  loudness and true peak per clip with ffmpeg `ebur128` (cached per asset range) and sets clip
+  volumes to hit a LUFS target (default -14), capped by a true-peak ceiling and the ×4 volume
+  limit. The Audio section of the properties panel has "Duck under speech" and "Normalize
+  loudness" buttons (REST: `POST /api/projects/:id/audio/duck` and `/audio/normalize`).
 - **Brand kit**: an optional `brand` in the project settings holds colors (primary, secondary,
   accent, text, background), a body and a heading font family, and a logo image with its corner.
   The new `set_brand` operation and `set_brand_kit` MCP tool merge partial updates (`null` clears a
@@ -46,6 +51,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a margin, by default for the whole timeline. The editor has a Brand kit dialog in the top bar
   (color pickers, font selects, logo picker, "Add logo to video"), and the Add menu previews the
   brand colors. `get_project` summaries include the brand kit.
+
+### Changed
+
+- The MCP server now exposes 33 tools (was 27): `remove_filler_words`, `detect_beats`,
+  `cut_to_beats`, `duck_music`, `normalize_loudness` and `set_brand_kit`.
+- CI uses `actions/checkout` v7, `actions/setup-node` v7, `pnpm/action-setup` v6 and
+  `actions/upload-artifact` v7.
 
 ## [0.2.0] - 2026-10-13
 
@@ -114,6 +126,7 @@ watches and intervenes live.
   Changesets release workflow, generated MCP tool reference, architecture/storage/licensing docs,
   synthetic CC0 test fixtures, scripted demo agent.
 
-[Unreleased]: https://github.com/Aepzie/cutline/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/Aepzie/cutline/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/Aepzie/cutline/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/Aepzie/cutline/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Aepzie/cutline/releases/tag/v0.1.0
