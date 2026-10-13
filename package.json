@@ -1,0 +1,54 @@
+{
+  "name": "cutline-monorepo",
+  "private": true,
+  "description": "Open-source browser video editor with a first-class MCP server, so AI agents can edit while you watch.",
+  "license": "MIT",
+  "type": "module",
+  "packageManager": "pnpm@10.34.7",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "turbo run dev --filter=@cutline/web --filter=@cutline/mcp-server",
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "e2e": "pnpm --filter @cutline/web e2e",
+    "start": "pnpm --filter @cutline/mcp-server start",
+    "fixtures": "node scripts/generate-fixtures.mjs",
+    "docs:tools": "pnpm --filter @cutline/mcp-server docs:tools",
+    "changeset": "changeset",
+    "version-packages": "changeset version",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "*.{ts,tsx,js,mjs,cjs}": [
+      "eslint --fix --no-warn-ignored",
+      "prettier --write"
+    ],
+    "*.{json,md,yml,yaml,css,html}": "prettier --write"
+  },
+  "devDependencies": {
+    "@changesets/changelog-github": "^1.0.1",
+    "@changesets/cli": "^3.0.3",
+    "@commitlint/cli": "^21.2.3",
+    "@commitlint/config-conventional": "^21.2.3",
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^24.19.2",
+    "@vitest/coverage-v8": "^5.0.4",
+    "eslint": "^10.12.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.13.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.6.0",
+    "prettier": "^3.9.10",
+    "turbo": "^2.11.7",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.71.2",
+    "vitest": "^5.0.4"
+  }
+}

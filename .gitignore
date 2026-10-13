@@ -1,0 +1,36 @@
+# dependencies
+node_modules/
+
+# build output
+dist/
+build/
+*.tsbuildinfo
+.turbo/
+
+# test output
+coverage/
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
+
+# runtime data (projects, uploaded media, exports, analysis cache)
+.cutline-data/
+*.local
+
+# environment
+.env
+.env.*
+!.env.example
+
+# generated media fixtures (regenerate with `pnpm fixtures`)
+fixtures/media/*
+!fixtures/media/.gitkeep
+
+# editors / OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.log

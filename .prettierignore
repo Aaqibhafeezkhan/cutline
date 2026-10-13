@@ -1,0 +1,9 @@
+pnpm-lock.yaml
+dist/
+coverage/
+.turbo/
+.cutline-data/
+fixtures/media/
+playwright-report/
+test-results/
+CHANGELOG.md
