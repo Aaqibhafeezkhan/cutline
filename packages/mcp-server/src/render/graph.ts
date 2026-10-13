@@ -251,7 +251,6 @@ export function buildRenderGraph(
         const from = Math.max(clip.start, start);
         const to = Math.min(clipEnd(clip), end);
         if (to <= from) continue;
-        if (style.highlightColor) warnings.add('caption word highlighting is preview-only');
         base = drawCaption(
           chains,
           base,
@@ -260,6 +259,7 @@ export function buildRenderGraph(
           style,
           from - start,
           to - start,
+          clip.start - start,
           W,
           H,
           sx,
@@ -491,6 +491,61 @@ function drawText(
   return out;
 }
 
+interface CaptionLineWord {
+  text: string;
+  index: number;
+  x: number;
+}
+
+interface CaptionLine {
+  words: CaptionLineWord[];
+  width: number;
+  charCount: number;
+}
+
+function estimateCaptionTextWidth(text: string, fontSize: number): number {
+  let units = 0;
+  for (const char of text) {
+    if (/\s/.test(char)) units += 0.28;
+    else if (/[ilI.,:;!|']/.test(char)) units += 0.28;
+    else if (/[frt(){}\[\]]/.test(char)) units += 0.38;
+    else if (/[mwMW@%&]/.test(char)) units += 0.85;
+    else if (/[A-Z]/.test(char)) units += 0.64;
+    else if (/[0-9]/.test(char)) units += 0.56;
+    else if (/[a-z]/.test(char)) units += 0.53;
+    else units += 0.6;
+  }
+  return units * fontSize;
+}
+
+function layoutCaptionWords(text: string, fontSize: number, maxWidth: number): CaptionLine[] {
+  const charWidth = fontSize * 0.58;
+  const maxChars = Math.max(4, Math.floor(maxWidth / charWidth));
+  const spaceWidth = estimateCaptionTextWidth(' ', fontSize);
+  const lines: CaptionLine[] = [];
+  let line: CaptionLine = { words: [], width: 0, charCount: 0 };
+  let index = 0;
+
+  const flush = (keepEmpty = false) => {
+    if (line.words.length > 0 || keepEmpty) lines.push(line);
+    line = { words: [], width: 0, charCount: 0 };
+  };
+
+  for (const para of text.split('\n')) {
+    const tokens = para.split(/\s+/).filter(Boolean);
+    for (const token of tokens) {
+      if (line.words.length > 0 && line.charCount + 1 + token.length > maxChars) flush();
+      const x = line.words.length === 0 ? 0 : line.width + spaceWidth;
+      line.words.push({ text: token, index, x });
+      line.width = x + estimateCaptionTextWidth(token, fontSize);
+      line.charCount += (line.words.length > 1 ? 1 : 0) + token.length;
+      index++;
+    }
+    flush(tokens.length === 0);
+  }
+  return lines;
+}
+
 function drawCaption(
   chains: string[],
   base: string,
@@ -499,6 +554,7 @@ function drawCaption(
   style: ReturnType<typeof CaptionStyleSchema.parse>,
   from: number,
   to: number,
+  clipStart: number,
   W: number,
   H: number,
   sx: number,
@@ -528,5 +584,44 @@ function drawCaption(
     parts.push('box=1', `boxcolor=${ffColor(style.backgroundColor)}`, `boxborderw=${pad}`);
   }
   chains.push(`[${base}]drawtext=${parts.join(':')}[${out}]`);
-  return out;
+
+  const tokens = clip.text.split(/\s+/).filter(Boolean);
+  if (!style.highlightColor || !clip.words || clip.words.length !== tokens.length) return out;
+
+  const lines = layoutCaptionWords(clip.text, size, style.maxWidth * W);
+  const lineHeight = size * 1.2;
+  let current = out;
+  for (const [lineIndex, line] of lines.entries()) {
+    for (const word of line.words) {
+      const timing = clip.words[word.index];
+      if (!timing || timing.end <= timing.start) continue;
+      const wordStart = clipStart + timing.start;
+      const wordEnd = clipStart + timing.end;
+      if (wordEnd <= from || wordStart >= to) continue;
+      const wordWidth = estimateCaptionTextWidth(word.text, size);
+      const prefixWidth = word.x;
+      const suffixWidth = Math.max(0, line.width - prefixWidth - wordWidth);
+      const x = `(w-${num(prefixWidth)}-text_w-${num(suffixWidth)})/2+${num(prefixWidth)}`;
+      const rowOffset = lineIndex * lineHeight;
+      const wordY =
+        style.position === 'top'
+          ? num(margin + pad + rowOffset)
+          : style.position === 'middle'
+            ? `(h-text_h)/2+${num(rowOffset - ((lines.length - 1) * lineHeight) / 2)}`
+            : `h-text_h-${num(margin + pad + (lines.length - 1 - lineIndex) * lineHeight)}`;
+      const highlightParts = [
+        `textfile=${filterPath(opts.textFile(word.text))}`,
+        fontOption(style.fontFamily, true, false, opts.fontFile),
+        `fontsize=${num(size)}`,
+        `fontcolor=${ffColor(style.highlightColor)}`,
+        `x='${x}'`,
+        `y='${wordY}'`,
+        `enable='between(t,${num(from)},${num(to)})*gte(t,${num(wordStart)})*lt(t,${num(wordEnd)})'`,
+      ];
+      const next = `${out}_highlight_${word.index}`;
+      chains.push(`[${current}]drawtext=${highlightParts.join(':')}[${next}]`);
+      current = next;
+    }
+  }
+  return current;
 }
