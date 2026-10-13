@@ -52,3 +52,33 @@ export function selectAll(): void {
   const { project, select } = useEditor.getState();
   if (project) select(project.tracks.flatMap((t) => t.clips.map((c) => c.id)));
 }
+
+/** Adds a shape at the playhead and selects it. */
+export async function addShape(shape: 'rectangle' | 'ellipse'): Promise<void> {
+  const { project, dispatch } = useEditor.getState();
+  if (!project) return;
+  const size = Math.round(Math.min(project.settings.width, project.settings.height) / 4);
+  const ok = await dispatch([
+    {
+      type: 'add_shape',
+      shape,
+      start: currentTime(),
+      duration: 3,
+      width: shape === 'ellipse' ? size : size * 2,
+      height: size,
+      fill: shape === 'ellipse' ? '#f59e0b' : '#2563eb',
+      cornerRadius: shape === 'rectangle' ? Math.round(size / 8) : 0,
+    },
+  ]);
+  if (ok) selectNewest('shape');
+}
+
+/** Selects the most recently created clip of a type (ids are random, so use the activity entry). */
+function selectNewest(type: string): void {
+  const { project, activity, select } = useEditor.getState();
+  const created = activity[0]?.affectedIds ?? [];
+  const id = project?.tracks
+    .flatMap((t) => t.clips)
+    .find((c) => c.type === type && created.includes(c.id))?.id;
+  if (id) select([id]);
+}

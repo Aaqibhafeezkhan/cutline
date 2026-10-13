@@ -14,6 +14,7 @@ const COLORS: Record<Clip['type'], string> = {
   audio: 'bg-media-audio',
   text: 'bg-media-text',
   caption: 'bg-media-caption',
+  shape: 'bg-media-shape',
 };
 
 function useHighlight(clipId: string) {
@@ -32,6 +33,8 @@ function useHighlight(clipId: string) {
 
 function label(clip: Clip, assetName: string | undefined): string {
   if (clip.type === 'text' || clip.type === 'caption') return clip.text;
+  if (clip.type === 'shape')
+    return clip.name ?? (clip.shape === 'ellipse' ? 'Ellipse' : 'Rectangle');
   return clip.name ?? assetName ?? clip.type;
 }
 

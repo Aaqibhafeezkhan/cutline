@@ -4,6 +4,7 @@ import {
   type Clip,
   type ClipPropsPatch,
   type OperationInput,
+  type ShapeClip,
   type TextClip,
 } from '@cutline/core';
 import { Textarea } from '@/components/ui/input';
@@ -72,9 +73,11 @@ export function Properties() {
       </Section>
 
       {(clip.type === 'text' || clip.type === 'caption') && <TextSection clip={clip} set={set} />}
-      {(clip.type === 'video' || clip.type === 'image' || clip.type === 'text') && (
-        <VisualSection clip={clip} set={set} run={run} />
-      )}
+      {clip.type === 'shape' && <ShapeSection clip={clip} set={set} />}
+      {(clip.type === 'video' ||
+        clip.type === 'image' ||
+        clip.type === 'text' ||
+        clip.type === 'shape') && <VisualSection clip={clip} set={set} run={run} />}
       {(clip.type === 'video' || clip.type === 'audio') && (
         <Section title="Audio">
           <SliderField
@@ -120,6 +123,84 @@ export function Properties() {
 
 function Empty({ text }: { text: string }) {
   return <p className="p-4 text-sm text-muted">{text}</p>;
+}
+
+function ShapeSection({ clip, set }: { clip: ShapeClip; set: (p: ClipPropsPatch) => void }) {
+  return (
+    <Section title="Shape">
+      <Field label="Shape">
+        <Select
+          label="Shape"
+          value={clip.shape}
+          onValueChange={(v) => set({ shape: v as ShapeClip['shape'] })}
+          options={[
+            { value: 'rectangle', label: 'Rectangle' },
+            { value: 'ellipse', label: 'Ellipse' },
+          ]}
+        />
+      </Field>
+      <NumberField
+        label="Width"
+        suffix="px"
+        min={1}
+        step={10}
+        value={clip.width}
+        onCommit={(width) => set({ width })}
+      />
+      <NumberField
+        label="Height"
+        suffix="px"
+        min={1}
+        step={10}
+        value={clip.height}
+        onCommit={(height) => set({ height })}
+      />
+      {clip.shape === 'rectangle' && (
+        <NumberField
+          label="Corners"
+          suffix="px"
+          min={0}
+          step={2}
+          value={clip.cornerRadius}
+          onCommit={(cornerRadius) => set({ cornerRadius })}
+        />
+      )}
+      <Field label="Fill">
+        <div className="flex items-center gap-2">
+          <Switch
+            aria-label="Fill"
+            checked={clip.fill !== null}
+            onCheckedChange={(on) => set({ fill: on ? '#ffffff' : null })}
+          />
+          {clip.fill && (
+            <input
+              type="color"
+              aria-label="Fill color"
+              value={clip.fill.slice(0, 7)}
+              onChange={(e) => set({ fill: e.target.value + (clip.fill!.slice(7) || '') })}
+              className="h-6 w-10 rounded border border-border bg-background"
+            />
+          )}
+        </div>
+      </Field>
+      <NumberField
+        label="Outline"
+        suffix="px"
+        min={0}
+        max={500}
+        step={1}
+        value={clip.strokeWidth}
+        onCommit={(strokeWidth) => set({ strokeWidth })}
+      />
+      {clip.strokeWidth > 0 && (
+        <ColorField
+          label="Outline color"
+          value={clip.strokeColor}
+          onCommit={(strokeColor) => set({ strokeColor })}
+        />
+      )}
+    </Section>
+  );
 }
 
 function TextSection({
@@ -204,7 +285,7 @@ function VisualSection({
   set,
   run,
 }: {
-  clip: Extract<Clip, { type: 'video' | 'image' | 'text' }>;
+  clip: Extract<Clip, { type: 'video' | 'image' | 'text' | 'shape' }>;
   set: (p: ClipPropsPatch) => void;
   run: (ops: OperationInput[]) => void;
 }) {

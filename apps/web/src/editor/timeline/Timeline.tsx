@@ -7,14 +7,14 @@ import {
   type DragEvent,
   type PointerEvent,
 } from 'react';
-import { Magnet, Minus, Plus, Scissors, Trash2 } from 'lucide-react';
+import { Circle, Magnet, Minus, Plus, Scissors, Square, Trash2 } from 'lucide-react';
 import { clipEnd, projectDuration, type Clip, type Track } from '@cutline/core';
 import { Button } from '@/components/ui/button';
 import { Tooltip } from '@/components/ui/misc';
 import { seek } from '@/lib/player-bridge';
 import { useEditor, usePlayhead } from '@/lib/store';
 import { cn, formatTimecode } from '@/lib/utils';
-import { deleteSelection, splitAtPlayhead } from '../commands';
+import { addShape, deleteSelection, splitAtPlayhead } from '../commands';
 import { ClipView, type DragKind } from './ClipView';
 import {
   HEADER_WIDTH,
@@ -243,6 +243,27 @@ export function Timeline() {
             onClick={() => setSnapping((s) => !s)}
           >
             <Magnet />
+          </Button>
+        </Tooltip>
+        <div className="mx-1 h-5 w-px bg-border" aria-hidden />
+        <Tooltip content="Add rectangle at playhead">
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Add rectangle"
+            onClick={() => void addShape('rectangle')}
+          >
+            <Square />
+          </Button>
+        </Tooltip>
+        <Tooltip content="Add ellipse at playhead">
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Add ellipse"
+            onClick={() => void addShape('ellipse')}
+          >
+            <Circle />
           </Button>
         </Tooltip>
         <TimeReadout duration={duration} />
