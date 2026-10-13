@@ -55,6 +55,9 @@ export function splitClip<C extends Clip>(clip: C, local: number, rightId: strin
   if ('fadeOut' in left) left.fadeOut = 0;
   if ('fadeIn' in right) right.fadeIn = 0;
   if ('transitionIn' in right) delete right.transitionIn;
+  // Entrance stays with the left part, exit with the right part.
+  if ('animationOut' in left) delete left.animationOut;
+  if ('animationIn' in right) delete right.animationIn;
   return [left, right];
 }
 
