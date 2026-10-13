@@ -16,6 +16,7 @@ export * from './resolve';
 export * from './ducking';
 export * from './analysis';
 export * from './captions';
+export * from './fillers';
 export * from './summarize';
 export * from './operations/schemas';
 export {

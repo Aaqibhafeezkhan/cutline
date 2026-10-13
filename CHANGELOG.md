@@ -21,6 +21,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   limit.
 - "Duck under speech" and "Normalize loudness" buttons in the Audio section of the properties
   panel (REST: `POST /api/projects/:id/audio/duck` and `/audio/normalize`).
+- **Remove filler words**: the new `remove_filler_words` MCP tool transcribes the timeline, finds
+  hesitations ("um", "uh", "er", "hmm", "äh", "ähm", "öhm", … — case and punctuation are ignored)
+  and cuts them with a single ripple `delete_range` (one undo step). `dryRun` previews the cuts,
+  `fillers` replaces the word list, `repeats` also removes stutters like "I I think", and padding
+  never reaches into neighbouring words. The editor's captions panel has a matching "Remove
+  fillers" button; core exports the pure `findFillerRanges` helper. Whisper often leaves
+  disfluencies out of its transcript, so only fillers it wrote down can be found.
 
 ## [0.2.0] - 2026-10-13
 

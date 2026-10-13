@@ -14,6 +14,7 @@ How to work:
 - Start with get_project (or create_project), then add_asset for media and add_clip to place it.
 - Ids (clip_…, track_…, asset_…) come from tool results; call get_project again when unsure, since ranges and ids change after cuts.
 - To remove silences: detect_silence, then delete_range with the returned ranges (it ripples all tracks so audio, video and captions stay in sync).
+- To remove "um"/"uh"/"äh" fillers from speech: remove_filler_words (dryRun=true first to review).
 - To add subtitles: add_captions with fromTranscript=true (do this AFTER cutting, so captions match the final timing).
 - For background music: duck_music lowers it under speech; normalize_loudness evens out clip levels (-14 LUFS by default).
 - To check your work: get_frames (look at stills), get_waveform_summary, get_transcript.

@@ -36,6 +36,7 @@ beforeAll(async () => {
     transcriber: new StaticTranscriber([
       { text: 'Hello', start: 0.2, end: 0.6 },
       { text: 'world.', start: 0.7, end: 1.2 },
+      { text: 'Um,', start: 1.4, end: 1.7 },
       { text: 'Second', start: 3.2, end: 3.6 },
       { text: 'part', start: 3.7, end: 4.1 },
     ]),
@@ -79,6 +80,7 @@ describe('tool catalogue', () => {
         'move_clip',
         'normalize_loudness',
         'redo',
+        'remove_filler_words',
         'render_preview',
         'set_audio_volume',
         'set_clip_property',
@@ -240,6 +242,37 @@ describe.runIf(hasFfmpeg && hasFixtures)('media tools via MCP (ffmpeg)', () => {
       format: 'text',
     });
     expect(assetTranscript.segments).toBeUndefined();
+  });
+
+  it('removes filler words from the transcript in one undo step', async () => {
+    const before = (await okCall('get_project')).project as { duration: number };
+    const preview = await okCall('remove_filler_words', { dryRun: true });
+    expect(preview.found).toEqual([{ text: 'Um,', start: 1.4, end: 1.7, kind: 'filler' }]);
+    expect(preview.ranges).toEqual([{ start: 1.35, end: 1.75 }]);
+    expect(preview.removedDuration).toBe(0.4);
+    expect(preview.version).toBeUndefined();
+    expect(String(preview.summary)).toMatch(
+      /^Would remove 1 filler word\(s\), 0\.4s.*"Um," at 1\.4s/,
+    );
+
+    const custom = await okCall('remove_filler_words', { fillers: ['hello'], dryRun: true });
+    expect((custom.found as Array<{ text: string }>).map((f) => f.text)).toEqual(['Hello']);
+
+    const cut = await okCall('remove_filler_words', {});
+    expect(cut.dryRun).toBe(false);
+    expect(cut.duration as number).toBeCloseTo(before.duration - 0.4, 3);
+    expect(String(cut.summary)).toMatch(/^Removed 1 filler word\(s\)/);
+
+    const none = await okCall('remove_filler_words', { dryRun: true });
+    expect(none.found).toEqual([]);
+    expect(String(none.summary)).toMatch(/No filler words found/);
+
+    const undone = await okCall('undo');
+    expect(undone.summary).toMatch(/Remove 1 filler word/);
+    await okCall('redo');
+
+    const bad = await call('remove_filler_words', { padding: 2 });
+    expect(bad.isError).toBe(true);
   });
 
   it('looks at frames and scenes', async () => {

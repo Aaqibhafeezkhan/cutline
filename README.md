@@ -13,7 +13,7 @@
   <a href="https://github.com/Aepzie/cutline/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/Aepzie/cutline/actions/workflows/ci.yml/badge.svg"></a>
   <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
   <img alt="TypeScript strict" src="https://img.shields.io/badge/TypeScript-strict-3178c6.svg">
-  <img alt="MCP" src="https://img.shields.io/badge/MCP-29%20tools-8a63d2.svg">
+  <img alt="MCP" src="https://img.shields.io/badge/MCP-30%20tools-8a63d2.svg">
 </p>
 
 > 🎬 _Demo GIF placeholder: Claude removes silences and adds captions while the timeline updates live. (Contributions welcome: record one with `pnpm --filter @cutline/mcp-server demo`.)_
@@ -42,16 +42,18 @@ the mouse, an agent can do with a tool call (and vice versa).
   dip-to-black, brightness/contrast/saturation/blur
 - Entrance/exit animation presets (fade, slide, zoom, pop) for overlays, no keyframing needed
 - Captions editor, properties panel, asset bin with drag-and-drop upload
+- One-click filler-word removal ("um", "uh", "äh", …) from the speech transcript, as one undo step
 - Audio auto-ducking (music under speech) and loudness normalization (-14 LUFS) in one click
 - **Live agent view**: agent edits pulse on the timeline, an activity feed shows what happened
   (also to editors that join later), presence shows which agent is connected
 - Shared undo/redo: undo the agent's change, or let the agent undo yours
 - Export in the browser (WebCodecs in a Web Worker, MP4 H.264/AAC) or on the server (ffmpeg)
 
-**MCP server (29 tools)**
+**MCP server (30 tools)**
 
 - **Editing:** `create_project`, `get_project`, `add_asset`, `add_clip`, `split_clip`, `trim_clip`,
-  `move_clip`, `delete_clip`, `delete_range`, `set_clip_property`, `animate_clip`,
+  `move_clip`, `delete_clip`, `delete_range`, `remove_filler_words`, `set_clip_property`,
+  `animate_clip`,
   `add_text_overlay`, `add_shape`, `add_template`, `add_captions`, `add_transition`,
   `set_audio_volume`, `apply_operations`, `undo`, `redo`
 - **Perception** (so the agent isn't editing blind): `get_transcript` (word timestamps, local
