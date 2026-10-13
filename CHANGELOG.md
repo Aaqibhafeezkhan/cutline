@@ -10,6 +10,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Shapes: rectangles (optionally rounded) and ellipses with fill and outline, via the new `add_shape` MCP tool, toolbar buttons and a properties section; rendered in the browser and by the server renderer.
+- Graphics templates (title, lower third, banner, callout) via the `add_template` MCP tool and an "Add" menu in the editor; text button and `T` shortcut; font family, italic and outline controls for text with matching server-side fonts.
+
+### Changed
+
+- New text and shape overlays always stack above whatever they overlap in time.
 
 ## [0.1.0] - 2026-10-13
 
