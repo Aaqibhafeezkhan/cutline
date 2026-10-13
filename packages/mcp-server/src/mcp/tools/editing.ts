@@ -7,6 +7,7 @@ import {
   ColorSchema,
   CueSchema,
   CutlineError,
+  DEFAULT_FILLERS,
   DurationSchema,
   IdSchema,
   OperationSchema,
@@ -20,7 +21,7 @@ import {
   wordsToCues,
   type Word,
 } from '@cutline/core';
-import { transcribeTimeline } from '../../media/timeline-transcript';
+import { planFillerCut, transcribeTimeline } from '../../media/timeline-transcript';
 import { editPayload, guard, ok, type ToolContext } from '../context';
 
 const projectId = IdSchema.optional().describe(
@@ -345,6 +346,86 @@ export function registerEditingTools(server: McpServer, ctx: ToolContext): void 
         { type: 'delete_range', ranges, trackIds: args.trackIds, ripple: args.ripple },
       ]);
       return ok(result.summary, editPayload(id, result));
+    }),
+  );
+
+  server.registerTool(
+    'remove_filler_words',
+    {
+      title: 'Remove filler words',
+      description: `Cut hesitation sounds ("um", "uh", "äh", "ähm", …) out of talking-head footage in one step. Transcribes the timeline audio (local Whisper, word timestamps, cached), finds the fillers and removes them with ONE delete_range (one undo step, ripples all unlocked tracks so audio, video and captions stay in sync). Matching ignores case and punctuation ("Um," matches). Default list: ${DEFAULT_FILLERS.join(', ')}. repeats=true also cuts stutters like "I I think". Use dryRun=true first to review what would be cut. Limitation: Whisper often omits disfluencies from its transcript, so fillers it did not write down cannot be found; pair with detect_silence for pauses.`,
+      inputSchema: z.object({
+        projectId,
+        fillers: z
+          .array(z.string().min(1).max(40))
+          .min(1)
+          .max(200)
+          .optional()
+          .describe('Words to remove; replaces the default list (case/punctuation-insensitive)'),
+        repeats: z
+          .boolean()
+          .optional()
+          .describe('Also cut immediate word repetitions such as "I I think" (default false)'),
+        padding: z
+          .number()
+          .min(0)
+          .max(0.5)
+          .optional()
+          .describe('Seconds also cut around each filler, never into kept words (default 0.05)'),
+        language: z
+          .string()
+          .min(2)
+          .max(10)
+          .optional()
+          .describe('Spoken language for transcription, e.g. "en", "de" (default: auto-detect)'),
+        dryRun: z
+          .boolean()
+          .optional()
+          .describe('Only report what would be cut, change nothing (default false)'),
+      }),
+      annotations: { destructiveHint: true },
+    },
+    guard(async (args, extra) => {
+      const id = await ctx.projectId(args.projectId);
+      const words = await timelineWords(ctx, id, args.language, extra);
+      const plan = planFillerCut(words, {
+        fillers: args.fillers,
+        repeats: args.repeats,
+        padding: args.padding ?? 0.05,
+      });
+      const base = {
+        projectId: id,
+        dryRun: Boolean(args.dryRun),
+        wordCount: words.length,
+        found: plan.found,
+        ranges: plan.ranges,
+        removedDuration: plan.removed,
+      };
+      if (plan.ranges.length === 0) {
+        return ok(
+          words.length === 0
+            ? 'No speech found in the timeline audio, so there are no filler words to remove.'
+            : `No filler words found in ${words.length} transcribed words. Whisper often leaves out hesitations; check get_transcript or cut by hand with delete_range.`,
+          base,
+        );
+      }
+      const listed = plan.found.map((f) => `"${f.text}" at ${f.start}s`).join(', ');
+      if (args.dryRun) {
+        return ok(
+          `Would remove ${plan.found.length} filler word(s), ${plan.removed}s in ${plan.ranges.length} cut(s): ${listed}. Call again without dryRun to cut.`,
+          base,
+        );
+      }
+      const result = await docs.apply(
+        id,
+        [{ type: 'delete_range', ranges: plan.ranges }],
+        ctx.origin(),
+        `Remove ${plan.found.length} filler word(s)`,
+      );
+      return ok(
+        `Removed ${plan.found.length} filler word(s), ${plan.removed}s in ${plan.ranges.length} cut(s): ${listed}.`,
+        { ...base, ...editPayload(id, result) },
+      );
     }),
   );
 

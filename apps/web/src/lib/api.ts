@@ -146,6 +146,15 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ language }),
     }),
+  removeFillers: (projectId: string, options: { dryRun?: boolean; repeats?: boolean } = {}) =>
+    request<{
+      summary: string;
+      found: Array<{ text: string; start: number; end: number }>;
+      removedDuration: number;
+    }>(`/api/projects/${projectId}/fillers/remove`, {
+      method: 'POST',
+      body: JSON.stringify(options),
+    }),
 };
 
 export function assetUrl(projectId: string, asset: Pick<Asset, 'id'>): string {

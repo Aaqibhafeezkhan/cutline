@@ -51,7 +51,12 @@ beforeAll(async () => {
   const dataDir = await tempDir();
   server = await startServer(
     { port: 0, dataDir, mediaRoots: [FIXTURES, dataDir], ffmpegPath: FFMPEG, ffprobePath: FFPROBE },
-    { transcriber: new StaticTranscriber([{ text: 'Hi', start: 0.1, end: 0.5 }]) },
+    {
+      transcriber: new StaticTranscriber([
+        { text: 'Hi', start: 0.1, end: 0.5 },
+        { text: 'um…', start: 0.7, end: 0.9 },
+      ]),
+    },
   );
   client = new Client({ name: 'e2e-agent', version: '1.0.0' });
   await client.connect(new StreamableHTTPClientTransport(new URL(`${server.url}/mcp`)));
@@ -172,6 +177,29 @@ describe.runIf(hasFfmpeg && hasFixtures)('MCP over Streamable HTTP + live sync',
     const download = await rawGet(new URL(String(exported.url)).pathname);
     expect(download.status).toBe(200);
     expect(download.body.length).toBe(exported.sizeBytes);
+
+    // The editor's "Remove fillers" button: dry run, then one undoable cut.
+    const removeFillers = async (body: Record<string, unknown>) => {
+      const res = await fetch(`${server.url}/api/projects/${projectId}/fillers/remove`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      expect(res.status).toBe(200);
+      return (await res.json()) as { summary: string; removedDuration: number; version?: number };
+    };
+    const preview = await removeFillers({ dryRun: true });
+    expect(preview.summary).toBe('Would remove 1 filler word(s) (0.3s).');
+    expect(preview.version).toBeUndefined();
+    const removed = await removeFillers({});
+    expect(removed.summary).toBe('Removed 1 filler word(s) (0.3s).');
+    expect(removed.version).toBeGreaterThan(0);
+    expect((await removeFillers({})).summary).toBe('No filler words found.');
+    expect(
+      messages.some(
+        (m) => m.type === 'activity' && m.tool === 'remove_filler_words' && m.status === 'finished',
+      ),
+    ).toBe(true);
     ws.close();
   }, 120_000);
 });

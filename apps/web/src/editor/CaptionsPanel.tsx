@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Loader2, Plus, Sparkles, Trash2 } from 'lucide-react';
+import { Eraser, Loader2, Plus, Sparkles, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   CaptionStyleSchema,
@@ -43,6 +43,24 @@ export function CaptionsPanel() {
     }
   };
 
+  const removeFillers = async () => {
+    setBusy(true);
+    try {
+      const r = await api.removeFillers(projectId);
+      toast.success(r.summary, {
+        description: r.found.length
+          ? r.found.map((f) => f.text).join(', ')
+          : 'The transcript may omit hesitations; cut them by hand if you still hear any.',
+      });
+    } catch (err) {
+      toast.error('Could not remove filler words', {
+        description: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const addCue = () => {
     const t = usePlayhead.getState().time;
     void dispatch([
@@ -60,9 +78,18 @@ export function CaptionsPanel() {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex gap-1 border-b border-border p-2">
+      <div className="flex flex-wrap gap-1 border-b border-border p-2">
         <Button size="sm" variant="secondary" onClick={() => void generate()} disabled={busy}>
           {busy ? <Loader2 className="animate-spin" /> : <Sparkles />} From speech
+        </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => void removeFillers()}
+          disabled={busy}
+          title='Cut "um", "uh", "äh" … from the timeline (one undo step)'
+        >
+          <Eraser /> Remove fillers
         </Button>
         <Button size="sm" variant="ghost" onClick={addCue}>
           <Plus /> Cue at playhead
