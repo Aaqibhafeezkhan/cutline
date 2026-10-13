@@ -34,3 +34,6 @@ Thumbs.db
 .vscode/*
 !.vscode/extensions.json
 *.log
+
+# local agent tooling
+.claude/

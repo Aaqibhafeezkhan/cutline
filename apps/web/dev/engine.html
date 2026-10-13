@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Cutline engine playground</title>
+    <style>
+      body {
+        background: #111;
+        color: #eee;
+        font:
+          14px system-ui,
+          sans-serif;
+        margin: 16px;
+      }
+      canvas {
+        background: #000;
+        max-width: 100%;
+      }
+      button {
+        margin-right: 8px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Engine playground (dev only)</h1>
+    <p>
+      Renders a project built from <code>fixtures/media</code> (run
+      <code>pnpm fixtures</code> first).
+    </p>
+    <canvas id="preview" width="640" height="360"></canvas>
+    <div>
+      <button id="play">Play / pause</button>
+      <button id="export">Export MP4</button>
+      <span id="status">loading…</span>
+    </div>
+    <script type="module" src="./engine-demo.ts"></script>
+  </body>
+</html>

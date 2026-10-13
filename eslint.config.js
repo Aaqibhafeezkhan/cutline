@@ -34,7 +34,13 @@ export default tseslint.config(
     },
   },
   {
-    files: ['packages/mcp-server/**', 'scripts/**', '**/*.config.{js,ts,mjs}', '**/e2e/**'],
+    files: [
+      'packages/mcp-server/**',
+      'scripts/**',
+      'apps/web/scripts/**',
+      '**/*.config.{js,ts,mjs}',
+      '**/e2e/**',
+    ],
     languageOptions: { globals: { ...globals.node } },
     rules: { 'no-console': 'off' },
   },
