@@ -10,7 +10,7 @@ import {
 } from '@cutline/core';
 import type { BlobStore } from '../storage/types';
 import { BEAT_SAMPLE_RATE, detectBeats, type BeatAnalysis, type BeatOptions } from './beats';
-import type { Ffmpeg } from './ffmpeg';
+import type { Ffmpeg, Loudness } from './ffmpeg';
 import type { Transcriber, TranscribeOptions } from './transcribe';
 
 const ENVELOPE_WINDOW = 0.01;
@@ -86,6 +86,33 @@ export class AnalysisService {
       .slice(0, 10);
     return this.cached(`cache/${asset.id}/transcript-${variant}.json`, async () =>
       this.transcriber.transcribe(await this.pcm(asset, options.signal), options),
+    );
+  }
+
+  /** A transcript that is already cached (auto-detected language), without transcribing. */
+  async cachedTranscript(asset: Asset): Promise<Word[] | null> {
+    const variant = createHash('sha1')
+      .update(`${this.transcriber.id}|auto`)
+      .digest('hex')
+      .slice(0, 10);
+    const key = `cache/${asset.id}/transcript-${variant}.json`;
+    if (!(await this.blobs.stat(key))) return null;
+    return this.cached<Word[]>(key, () => Promise.reject(new Error('cache entry vanished')));
+  }
+
+  /** EBU R128 loudness of a source window of an asset (cached per window). */
+  async loudness(
+    asset: Asset,
+    start: number,
+    duration: number,
+    signal?: AbortSignal,
+  ): Promise<Loudness> {
+    if (!asset.hasAudio) {
+      throw new CutlineError('INVALID_ARGUMENT', `Asset "${asset.name}" has no audio.`);
+    }
+    const ms = (s: number) => Math.round(s * 1000);
+    return this.cached(`cache/${asset.id}/loudness-${ms(start)}-${ms(duration)}.json`, async () =>
+      this.ffmpeg.loudness(await this.blobs.localPath(asset.src), start, duration, signal),
     );
   }
 

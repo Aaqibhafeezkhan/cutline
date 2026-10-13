@@ -132,6 +132,36 @@ export class Ffmpeg {
     return [...stderr.matchAll(/showinfo.*?pts_time:\s*([\d.]+)/g)].map((m) => Number(m[1]));
   }
 
+  /** EBU R128 integrated loudness and true peak of `duration` seconds from `start`. */
+  async loudness(
+    path: string,
+    start: number,
+    duration: number,
+    signal?: AbortSignal,
+  ): Promise<Loudness> {
+    await this.require('Loudness measurement');
+    const { stderr } = await this.run(
+      [
+        '-ss',
+        String(start),
+        '-t',
+        String(duration),
+        '-i',
+        path,
+        '-vn',
+        '-map',
+        '0:a:0',
+        '-af',
+        'ebur128=peak=true',
+        '-f',
+        'null',
+        '-',
+      ],
+      { signal },
+    );
+    return parseEbur128(stderr);
+  }
+
   /** One JPEG frame of a source file at `time` seconds, `width` px wide. */
   async frameAt(path: string, time: number, width: number): Promise<Buffer> {
     await this.require('Frame extraction');
@@ -197,6 +227,26 @@ export interface FfprobeStream {
 export interface FfprobeResult {
   streams?: FfprobeStream[];
   format?: { duration?: string; format_name?: string };
+}
+
+export interface Loudness {
+  /** Integrated loudness in LUFS (-70 or below = silence). */
+  integrated: number;
+  /** True peak in dBTP (null if ffmpeg did not report it). */
+  truePeak: number | null;
+}
+
+/** Parses the summary that the ebur128 filter prints when it finishes. */
+export function parseEbur128(stderr: string): Loudness {
+  const summary = stderr.slice(stderr.lastIndexOf('Summary:'));
+  const integrated = /I:\s+(-inf|-?[\d.]+)\s+LUFS/.exec(summary);
+  if (!integrated) throw new Error('ffmpeg ebur128 did not report an integrated loudness.');
+  const peak = /True peak:\s+Peak:\s+(-?[\d.]+)\s+dBFS/.exec(summary);
+  // -inf (digital silence) is reported as the -70 LUFS gate so the value stays JSON-safe.
+  return {
+    integrated: integrated[1] === '-inf' ? -70 : Math.max(-70, Number(integrated[1])),
+    truePeak: peak ? Number(peak[1]) : null,
+  };
 }
 
 /** Escapes a value for use inside a single-quoted ffmpeg filter argument. */

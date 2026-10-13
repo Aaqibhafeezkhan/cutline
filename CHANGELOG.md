@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Auto-ducking**: background music gets quieter automatically while someone speaks. The new
+  `duck_music` MCP tool finds speech on the voice track(s) (cached transcript word timings, or
+  non-silent ranges) and picks the music track by itself when it can; the new `duck_audio`
+  operation stores a clip-relative ducking envelope (`amountDb`, `attack`, `release`) that the
+  resolver turns into gain points, so the browser engine and the ffmpeg renderer both follow it
+  and it survives trims, splits and ripple cuts. Re-running replaces the previous ducking.
+- **Loudness normalization**: the new `normalize_loudness` MCP tool measures EBU R128 integrated
+  loudness and true peak per clip with ffmpeg `ebur128` (cached per asset range) and sets clip
+  volumes to hit a LUFS target (default -14), capped by a true-peak ceiling and the ×4 volume
+  limit.
+- "Duck under speech" and "Normalize loudness" buttons in the Audio section of the properties
+  panel (REST: `POST /api/projects/:id/audio/duck` and `/audio/normalize`).
 - **Beat detection and cutting on the beat**: a pure-TypeScript beat tracker (spectral-flux onset
   envelope, autocorrelation tempo estimate with an 80–160 BPM preference, dynamic-programming beat
   grid, downbeats when clear) with results cached per asset. New MCP tools `detect_beats` (BPM,

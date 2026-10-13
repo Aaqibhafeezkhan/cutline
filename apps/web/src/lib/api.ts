@@ -155,6 +155,16 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(options),
     }),
+  duckMusic: (projectId: string, musicTrackId: string) =>
+    request<{ summary: string }>(`/api/projects/${projectId}/audio/duck`, {
+      method: 'POST',
+      body: JSON.stringify({ musicTrackId }),
+    }),
+  normalizeLoudness: (projectId: string, clipIds: string[]) =>
+    request<{ summary: string }>(`/api/projects/${projectId}/audio/normalize`, {
+      method: 'POST',
+      body: JSON.stringify({ clipIds }),
+    }),
 };
 
 export function assetUrl(projectId: string, asset: Pick<Asset, 'id'>): string {
