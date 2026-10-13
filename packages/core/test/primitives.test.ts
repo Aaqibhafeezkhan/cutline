@@ -26,6 +26,7 @@ import {
   recordHistory,
   redo,
   roundTime,
+  round3,
   sequentialContext,
   sliceKeyframes,
   sliceAllKeyframes,
@@ -44,6 +45,7 @@ describe('time and ids', () => {
     expect(Object.is(roundTime(-0.0000001), 0)).toBe(true);
     expect(approxEqual(1, 1 + 1e-7)).toBe(true);
     expect(formatRange(1.23456, 2)).toBe('1.235s–2s');
+    expect(round3(1.23456)).toBe(1.235);
   });
 
   it('generates ids', () => {

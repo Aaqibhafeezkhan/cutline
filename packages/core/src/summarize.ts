@@ -1,8 +1,9 @@
 import { projectDuration } from './queries';
 import type { Clip, Project } from './schema';
 import { clipEnd } from './schema';
+import { round3 } from './time';
 
-const r3 = (n: number) => Math.round(n * 1000) / 1000;
+const r3 = round3;
 
 export interface ClipSummary {
   id: string;

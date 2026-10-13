@@ -23,3 +23,4 @@ export {
   type ApplyResult,
 } from './operations/apply';
 export type { OpOutcome } from './operations/outcome';
+export * from './protocol';

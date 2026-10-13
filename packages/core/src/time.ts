@@ -6,6 +6,11 @@ export function roundTime(t: number): number {
   return r === 0 ? 0 : r; // normalize -0
 }
 
+/** Rounds to milliseconds for compact human/LLM-facing output. */
+export function round3(n: number): number {
+  return Math.round(n * 1000) / 1000;
+}
+
 export function approxEqual(a: number, b: number, eps = EPSILON): boolean {
   return Math.abs(a - b) <= eps;
 }
