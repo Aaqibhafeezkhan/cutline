@@ -1,6 +1,6 @@
 {
   "name": "@cutline/core",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
   "description": "Cutline timeline schema, pure edit operations, JSON patches, undo/redo and migrations.",
   "license": "MIT",
