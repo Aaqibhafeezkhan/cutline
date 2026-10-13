@@ -316,6 +316,18 @@ export function createApp(services: Services): AppHandle {
     }),
   );
 
+  // Source-time RMS/peak envelope; computed lazily and cached by AnalysisService.
+  api.get(
+    '/projects/:id/assets/:assetId/envelope',
+    route(async (req, res) => {
+      const asset = findAsset(
+        (await docs.get(param(req, 'id'))).project,
+        param(req, 'assetId'),
+      );
+      res.json({ envelope: await services.analysis.envelope(asset) });
+    }),
+  );
+
   api.get(
     '/projects/:id/exports',
     route(async (req, res) => {

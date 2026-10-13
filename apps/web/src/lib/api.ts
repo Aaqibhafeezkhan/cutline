@@ -1,4 +1,4 @@
-import type { Asset, CutlineErrorJSON, HistoryInfo, Project } from '@cutline/core';
+import type { Asset, CutlineErrorJSON, Envelope, HistoryInfo, Project } from '@cutline/core';
 
 const TOKEN_KEY = 'cutline.token';
 
@@ -133,6 +133,11 @@ export const api = {
   listExports: (projectId: string) =>
     request<{ exports: Array<{ fileName: string; url: string; sizeBytes: number }> }>(
       `/api/projects/${projectId}/exports`,
+    ),
+  /** Loudness envelope for an asset, computed once then read from the server cache. */
+  getEnvelope: (projectId: string, assetId: string) =>
+    request<{ envelope: Envelope }>(
+      `/api/projects/${projectId}/assets/${assetId}/envelope`,
     ),
   /** Beat grid computed earlier (null if never analysed). */
   getBeats: (projectId: string, assetId: string) =>
