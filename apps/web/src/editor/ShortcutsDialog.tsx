@@ -4,6 +4,7 @@ import { Kbd } from '@/components/ui/misc';
 export const SHORTCUTS: Array<[string[], string]> = [
   [['Space'], 'Play / pause'],
   [['S'], 'Split at playhead (selected clips, or all under the playhead)'],
+  [['T'], 'Add text at the playhead'],
   [['Del'], 'Delete selected clips'],
   [['Shift', 'Del'], 'Ripple delete (close the gap)'],
   [['Ctrl', 'Z'], 'Undo (works on agent changes too)'],
