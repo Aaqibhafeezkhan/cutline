@@ -9,6 +9,7 @@ import {
   type Word,
 } from '@cutline/core';
 import type { BlobStore } from '../storage/types';
+import { BEAT_SAMPLE_RATE, detectBeats, type BeatAnalysis, type BeatOptions } from './beats';
 import type { Ffmpeg } from './ffmpeg';
 import type { Transcriber, TranscribeOptions } from './transcribe';
 
@@ -86,6 +87,40 @@ export class AnalysisService {
     return this.cached(`cache/${asset.id}/transcript-${variant}.json`, async () =>
       this.transcriber.transcribe(await this.pcm(asset, options.signal), options),
     );
+  }
+
+  private beatKey(asset: Asset, options: BeatOptions): string {
+    return `cache/${asset.id}/beats-${options.minBpm ?? 60}-${options.maxBpm ?? 200}.json`;
+  }
+
+  /** Tempo and beat grid of an asset's audio in source time. */
+  async beats(
+    asset: Asset,
+    options: BeatOptions = {},
+    signal?: AbortSignal,
+  ): Promise<BeatAnalysis> {
+    if (!asset.hasAudio) {
+      throw new CutlineError('INVALID_ARGUMENT', `Asset "${asset.name}" has no audio.`, {
+        hint: 'Detect beats on a music or video asset that has an audio stream.',
+      });
+    }
+    return this.cached(this.beatKey(asset, options), async () =>
+      detectBeats(
+        await this.ffmpeg.decodePcm(
+          await this.blobs.localPath(asset.src),
+          BEAT_SAMPLE_RATE,
+          signal,
+        ),
+        BEAT_SAMPLE_RATE,
+        options,
+      ),
+    );
+  }
+
+  /** Beats computed earlier with the default BPM range, without analysing anything new. */
+  async cachedBeats(asset: Asset): Promise<BeatAnalysis | null> {
+    if (!asset.hasAudio || !(await this.blobs.stat(this.beatKey(asset, {})))) return null;
+    return this.beats(asset);
   }
 
   /** Scene cut timestamps in source time. */

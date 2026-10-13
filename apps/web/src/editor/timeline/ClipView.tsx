@@ -1,9 +1,11 @@
 import { memo, useEffect, useState, type PointerEvent } from 'react';
 import { Bot, Lock } from 'lucide-react';
 import { clipEnd, type Clip, type Track } from '@cutline/core';
+import type { BeatInfo } from '@/lib/api';
+import { useBeats } from '@/lib/beats';
 import { HIGHLIGHT_MS, useEditor } from '@/lib/store';
 import { cn } from '@/lib/utils';
-import { TRACK_HEIGHT } from './geometry';
+import { TRACK_HEIGHT, beatTimes } from './geometry';
 
 export type DragKind = 'move' | 'trim-start' | 'trim-end';
 
@@ -56,6 +58,7 @@ export const ClipView = memo(function ClipView({
     'assetId' in clip ? s.project?.assets.find((a) => a.id === clip.assetId)?.name : undefined,
   );
   const select = useEditor((s) => s.select);
+  const grid = useBeats((s) => ('assetId' in clip ? s.byAsset[clip.assetId] : undefined));
   const highlight = useHighlight(clip.id);
   const width = Math.max(2, clip.duration * zoom);
   const text = label(clip, assetName);
@@ -98,6 +101,7 @@ export const ClipView = memo(function ClipView({
           style={{ width: Math.min(width, (clip.transitionIn.duration / 2) * zoom) }}
         />
       )}
+      {grid && <BeatTicks clip={clip} grid={grid} zoom={zoom} />}
       <div className="pointer-events-none flex h-full items-start gap-1 px-1.5 py-1">
         {track.locked && <Lock className="size-3 shrink-0 opacity-70" />}
         {highlight && (
@@ -130,3 +134,23 @@ export const ClipView = memo(function ClipView({
     </div>
   );
 });
+
+/** Beat markers along the bottom of a clip; bars are taller. Thinned out when zoomed far out. */
+function BeatTicks({ clip, grid, zoom }: { clip: Clip; grid: BeatInfo; zoom: number }) {
+  const spacing = grid.bpm > 0 ? (60 / grid.bpm) * zoom : 0;
+  if (spacing < 4 && (!grid.downbeats || spacing * 4 < 4)) return null;
+  const barsOnly = spacing < 4;
+  const beats = beatTimes(clip, barsOnly ? grid.downbeats : grid.beats);
+  const bars = new Set(beatTimes(clip, grid.downbeats));
+  return (
+    <div aria-hidden data-beats={beats.length} className="pointer-events-none absolute inset-0">
+      {beats.map((t) => (
+        <div
+          key={t}
+          className="absolute bottom-0 w-px bg-white/70"
+          style={{ left: (t - clip.start) * zoom, height: bars.has(t) ? '45%' : '22%' }}
+        />
+      ))}
+    </div>
+  );
+}

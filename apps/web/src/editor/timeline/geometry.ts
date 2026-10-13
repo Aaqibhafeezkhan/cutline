@@ -1,4 +1,4 @@
-import { clipEnd, type Project, type Track } from '@cutline/core';
+import { clipEnd, type Clip, type Project, type Track } from '@cutline/core';
 
 export const TRACK_HEIGHT: Record<Track['kind'], number> = { video: 52, audio: 44, caption: 34 };
 export const RULER_HEIGHT = 26;
@@ -16,13 +16,14 @@ export function displayTracks(project: Project): Track[] {
   return [...visual, ...audio];
 }
 
-/** Times a dragged edge can snap to: clip edges, the playhead and 0. */
+/** Times a dragged edge can snap to: clip edges, the playhead, 0 and any extra (beats). */
 export function snapPoints(
   project: Project,
   excludeIds: readonly string[],
   playhead: number,
+  extra: readonly number[] = [],
 ): number[] {
-  const points = new Set<number>([0, playhead]);
+  const points = new Set<number>([0, playhead, ...extra]);
   for (const track of project.tracks) {
     for (const clip of track.clips) {
       if (excludeIds.includes(clip.id)) continue;
@@ -31,6 +32,28 @@ export function snapPoints(
     }
   }
   return [...points];
+}
+
+/** Timeline times of the beats (source time per asset) that fall inside a clip. */
+export function beatTimes(clip: Clip, grid: readonly number[] | undefined): number[] {
+  if (!grid || !('sourceStart' in clip)) return [];
+  const end = clip.sourceStart + clip.duration;
+  return grid
+    .filter((b) => b >= clip.sourceStart && b < end)
+    .map((b) => clip.start + b - clip.sourceStart);
+}
+
+/** Beat snap targets of every clip with a known beat grid, except `excludeIds`. */
+export function beatPoints(
+  project: Project,
+  grids: Readonly<Record<string, { beats: readonly number[] }>>,
+  excludeIds: readonly string[],
+): number[] {
+  return project.tracks.flatMap((t) =>
+    t.clips.flatMap((c) =>
+      excludeIds.includes(c.id) || !('assetId' in c) ? [] : beatTimes(c, grids[c.assetId]?.beats),
+    ),
+  );
 }
 
 /** Snaps `t` to the nearest point within `threshold` seconds. */
