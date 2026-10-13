@@ -1,5 +1,32 @@
-import { mapWordsToTimeline, type Word } from '@cutline/core';
+import {
+  findFillerRanges,
+  mapWordsToTimeline,
+  round3,
+  type FillerMatch,
+  type FillerOptions,
+  type TimeRange,
+  type Word,
+} from '@cutline/core';
 import type { Services } from '../services';
+
+export interface FillerCut {
+  /** Filler words found (timeline seconds, rounded to ms). */
+  found: FillerMatch[];
+  /** Merged timeline ranges to pass to delete_range. */
+  ranges: TimeRange[];
+  /** Total seconds the cut removes. */
+  removed: number;
+}
+
+/** Timeline words → filler words and the ranges that remove them. */
+export function planFillerCut(words: readonly Word[], options: FillerOptions = {}): FillerCut {
+  const { matches, ranges } = findFillerRanges(words, options);
+  return {
+    found: matches.map((m) => ({ ...m, start: round3(m.start), end: round3(m.end) })),
+    ranges,
+    removed: round3(ranges.reduce((s, r) => s + r.end - r.start, 0)),
+  };
+}
 
 export interface TranscriptProgress {
   update(fraction: number, message: string): void;
