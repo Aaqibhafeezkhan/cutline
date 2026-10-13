@@ -1,3 +1,4 @@
+import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { applyOperations, createProject, sequentialContext, type Project } from '@cutline/core';
@@ -60,6 +61,30 @@ async function fixtureProject(): Promise<{ project: Project; blobs: LocalBlobSto
       },
       { type: 'add_captions', cues: [{ start: 0, end: 3, text: 'Server rendered captions' }] },
       { type: 'set_volume', clipId: 'a', volume: 0.5, fadeOut: 0.5 },
+      {
+        type: 'add_shape',
+        start: 0,
+        duration: 4,
+        width: 360,
+        height: 70,
+        cornerRadius: 24,
+        fill: '#2563ebcc',
+        strokeWidth: 4,
+        strokeColor: '#ffffff',
+        transform: { y: 120 },
+      },
+      {
+        type: 'add_shape',
+        shape: 'ellipse',
+        start: 0,
+        duration: 6,
+        width: 80,
+        height: 80,
+        fill: null,
+        strokeWidth: 6,
+        strokeColor: '#facc15',
+        transform: { x: -220, y: -100 },
+      },
     ],
     ctx,
   ).project;
@@ -135,6 +160,11 @@ describe.runIf(hasFfmpeg && hasFixtures)('server renderer (ffmpeg)', () => {
     const { project, blobs } = await fixtureProject();
     const frames = await new Renderer(ffmpeg, blobs).frames(project, [0.2, 3.2], 320);
     expect(frames).toHaveLength(2);
+    if (process.env.CUTLINE_TEST_ARTIFACTS) {
+      frames.forEach((f, i) =>
+        writeFileSync(join(process.env.CUTLINE_TEST_ARTIFACTS!, `frame-${i}.jpg`), f),
+      );
+    }
     for (const f of frames) {
       expect(f[0]).toBe(0xff);
       expect(f[1]).toBe(0xd8);

@@ -11,6 +11,7 @@ import {
   type VisualClip,
 } from '@cutline/core';
 import { keyframePoints, multiply, num, piecewise, type Point } from './expr';
+import { shapeSource } from './shape';
 
 export interface GraphOptions {
   /** Timeline range to render; output time 0 = start. */
@@ -178,6 +179,7 @@ export function buildRenderGraph(
   );
   let n = 0;
   const nextBase = () => `base${++n}`;
+  let layerSeq = 0;
 
   for (const track of project.tracks) {
     if (track.hidden || track.kind === 'audio') continue;
@@ -226,42 +228,53 @@ export function buildRenderGraph(
         );
         continue;
       }
-      const asset = assets.get(clip.assetId);
-      const path = asset && assetPaths.get(asset.id);
-      if (!asset || !path) {
-        warnings.add(`missing media for clip ${clip.id}`);
-        continue;
-      }
-      const label = `v${inputs.length}`;
-      const idx = inputs.length;
       const len = to - from;
+      const label = `v${layerSeq++}`;
       const filters: string[] = [];
-      if (clip.type === 'video') {
-        const srcFrom = clip.sourceStart + (from - clip.start);
-        const pre = Math.max(0, -srcFrom);
-        const seek = Math.max(0, srcFrom);
-        const available = Math.max(0, (asset.duration ?? Infinity) - seek);
-        const take = Math.min(len - pre, available);
-        const post = Math.max(0, len - pre - take);
-        inputs.push(['-ss', num(seek), '-t', num(Math.max(take, 1 / fps)), '-i', path]);
-        filters.push(`[${idx}:v]setpts=PTS-STARTPTS`, `fps=${num(fps)}`);
-        if (pre > 0 || post > 0) {
-          filters.push(
-            `tpad=start_mode=clone:start_duration=${num(pre)}:stop_mode=clone:stop_duration=${num(post + 1 / fps)}`,
-          );
-        }
+      // Base size at scale 1, in output pixels.
+      let bw: number;
+      let bh: number;
+      if (clip.type === 'shape') {
+        const src = shapeSource(clip, sx, sy, fps, len);
+        filters.push(src.filter);
+        filters.push(`trim=duration=${num(len)}`);
+        bw = src.width;
+        bh = src.height;
       } else {
-        inputs.push(['-loop', '1', '-framerate', num(fps), '-t', num(len), '-i', path]);
-        filters.push(`[${idx}:v]setpts=PTS-STARTPTS`);
+        const asset = assets.get(clip.assetId);
+        const path = asset && assetPaths.get(asset.id);
+        if (!asset || !path) {
+          warnings.add(`missing media for clip ${clip.id}`);
+          continue;
+        }
+        const idx = inputs.length;
+        if (clip.type === 'video') {
+          const srcFrom = clip.sourceStart + (from - clip.start);
+          const pre = Math.max(0, -srcFrom);
+          const seek = Math.max(0, srcFrom);
+          const available = Math.max(0, (asset.duration ?? Infinity) - seek);
+          const take = Math.min(len - pre, available);
+          const post = Math.max(0, len - pre - take);
+          inputs.push(['-ss', num(seek), '-t', num(Math.max(take, 1 / fps)), '-i', path]);
+          filters.push(`[${idx}:v]setpts=PTS-STARTPTS`, `fps=${num(fps)}`);
+          if (pre > 0 || post > 0) {
+            filters.push(
+              `tpad=start_mode=clone:start_duration=${num(pre)}:stop_mode=clone:stop_duration=${num(post + 1 / fps)}`,
+            );
+          }
+        } else {
+          inputs.push(['-loop', '1', '-framerate', num(fps), '-t', num(len), '-i', path]);
+          filters.push(`[${idx}:v]setpts=PTS-STARTPTS`);
+        }
+        filters.push(`trim=duration=${num(len)}`);
+        // Media fits inside the frame (contain) at scale 1.
+        const mw = asset.width ?? project.settings.width;
+        const mh = asset.height ?? project.settings.height;
+        const fit = Math.min(project.settings.width / mw, project.settings.height / mh);
+        bw = mw * fit * sx;
+        bh = mh * fit * sy;
       }
-      filters.push(`trim=duration=${num(len)}`);
-
-      // Size: contain-fit times scale (keyframed scale → per-frame expression).
-      const mw = asset.width ?? project.settings.width;
-      const mh = asset.height ?? project.settings.height;
-      const fit = Math.min(project.settings.width / mw, project.settings.height / mh);
-      const bw = mw * fit * sx;
-      const bh = mh * fit * sy;
+      // Keyframed scale → per-frame expression.
       const scaleKf = clip.keyframes?.scale;
       const shift = clip.start - start;
       // Timestamps become output time before any time-dependent filter.
