@@ -22,3 +22,9 @@ export {
   type ExportResult,
 } from './export/plan';
 export { shapeMetrics } from './render/shape';
+export {
+  orientedBounds,
+  type LayerBounds,
+  type LocalRect,
+  type OrientedRect,
+} from './render/bounds';

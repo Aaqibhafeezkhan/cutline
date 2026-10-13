@@ -1,4 +1,10 @@
-export { Player, type PlayerOptions } from './player';
+export { Player, type PlayerOptions, type RenderedFrame } from './player';
+export {
+  orientedBounds,
+  type LayerBounds,
+  type LocalRect,
+  type OrientedRect,
+} from './render/bounds';
 export { exportVideo, type ExportVideoOptions } from './export';
 export {
   exportPlan,

@@ -8,7 +8,22 @@ import {
 import { AudioScheduler } from './audio/scheduler';
 import { FrameSourceProvider } from './media/frame-sources';
 import { MediaPool, type AssetLocator } from './media/media-pool';
+import type { LayerBounds } from './render/bounds';
 import { Compositor } from './render/compositor';
+
+/** What the last rendered frame looks like, for interactive overlays on top of the canvas. */
+export interface RenderedFrame {
+  /** Timeline time of the frame. */
+  time: number;
+  /** Canvas size in pixels (the preview may be smaller than the project). */
+  canvasWidth: number;
+  canvasHeight: number;
+  /** Project frame size in project pixels. */
+  projectWidth: number;
+  projectHeight: number;
+  /** Drawn layers bottom → top, in canvas pixels. */
+  layers: readonly LayerBounds[];
+}
 
 export interface PlayerOptions {
   canvas: HTMLCanvasElement;
@@ -44,6 +59,8 @@ export class Player {
   private readonly pool: MediaPool;
   private readonly sources: FrameSourceProvider;
   private destroyed = false;
+  private lastFrame: RenderedFrame | null = null;
+  private readonly renderListeners = new Set<(frame: RenderedFrame) => void>();
 
   private constructor(
     private readonly options: PlayerOptions,
@@ -68,6 +85,27 @@ export class Player {
 
   get isPlaying(): boolean {
     return this.playing;
+  }
+
+  /** Canvas size in pixels. */
+  get canvasSize(): { width: number; height: number } {
+    return this.compositor.size;
+  }
+
+  /** Bounds of the layers in the last rendered frame (bottom → top, canvas pixels). */
+  getLayerBounds(): readonly LayerBounds[] {
+    return this.lastFrame?.layers ?? [];
+  }
+
+  /** The last rendered frame's geometry, or null before the first render. */
+  getRenderedFrame(): RenderedFrame | null {
+    return this.lastFrame;
+  }
+
+  /** Calls `listener` after every frame that reaches the canvas. Returns an unsubscribe function. */
+  onRender(listener: (frame: RenderedFrame) => void): () => void {
+    this.renderListeners.add(listener);
+    return () => this.renderListeners.delete(listener);
   }
 
   setProject(project: Project): void {
@@ -120,6 +158,7 @@ export class Player {
         const sources = await this.sources.gather(frame, this.assets);
         if (this.destroyed) return;
         this.compositor.render(frame, sources);
+        this.emitRendered(frame.time, frame.width, frame.height);
         next = this.pendingRender;
       }
     } catch (err) {
@@ -129,6 +168,26 @@ export class Player {
       const waiters = this.renderWaiters;
       this.renderWaiters = [];
       waiters.forEach((resolve) => resolve());
+    }
+  }
+
+  private emitRendered(time: number, projectWidth: number, projectHeight: number): void {
+    const { width, height } = this.compositor.size;
+    const frame: RenderedFrame = {
+      time,
+      canvasWidth: width,
+      canvasHeight: height,
+      projectWidth,
+      projectHeight,
+      layers: this.compositor.layerBounds,
+    };
+    this.lastFrame = frame;
+    for (const listener of this.renderListeners) {
+      try {
+        listener(frame);
+      } catch (err) {
+        this.options.onError?.(err);
+      }
     }
   }
 
@@ -200,6 +259,7 @@ export class Player {
 
   destroy(): void {
     this.destroyed = true;
+    this.renderListeners.clear();
     this.pause();
     this.scheduler?.stop();
     void this.audioCtx?.close();

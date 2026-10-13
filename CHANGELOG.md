@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Shapes: rectangles (optionally rounded) and ellipses with fill and outline, via the new `add_shape` MCP tool, toolbar buttons and a properties section; rendered in the browser and by the server renderer.
 - Entrance/exit animation presets for visual clips (`fade`, `slide-left`/`-right`/`-up`/`-down`, `zoom`, `pop`) via the new `animate_clip` MCP tool, the `set_animation` operation, `set_clip_property` and an Animation section in the properties panel. They are evaluated at render time, so they follow trims and splits, and the server renderer matches the browser preview.
+- Canvas editing: select, move and scale video, image, text and shape overlays directly in the preview, with Shift axis lock, snapping to the frame center and edges, arrow-key nudging and agent-edit outlines; each drag commits a single `set_clip_props` (one undo step). The engine's `Player` now exposes the rendered layer bounds (`getLayerBounds()`, `getRenderedFrame()`, `onRender()`).
 
 ## [0.1.0] - 2026-10-13
 
