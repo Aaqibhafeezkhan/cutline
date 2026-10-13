@@ -225,6 +225,34 @@ describe('edge cases', () => {
     ).toBe('Updated nothing on clip clip_1.');
   });
 
+  it('creates new video tracks below caption tracks', () => {
+    const { project, ctx } = baseProject();
+    const p = run(
+      project,
+      [
+        { type: 'add_clip', assetId: 'asset_v', duration: 2 },
+        { type: 'add_captions', cues: [{ start: 0, end: 1, text: 'cap' }] },
+        { type: 'add_text', text: 'Title', start: 0 },
+      ],
+      ctx,
+    ).project;
+    expect(p.tracks.map((t) => t.kind)).toEqual(['video', 'audio', 'video', 'caption']);
+  });
+
+  it('adds tracks below caption tracks by default', () => {
+    const { project, ctx } = baseProject();
+    const p = run(
+      project,
+      [
+        { type: 'add_track', kind: 'caption', name: 'Subs' },
+        { type: 'add_track', kind: 'video', name: 'Top video' },
+        { type: 'add_track', kind: 'caption', name: 'Subs 2' },
+      ],
+      ctx,
+    ).project;
+    expect(p.tracks.map((t) => t.name)).toEqual(['V1', 'A1', 'Top video', 'Subs', 'Subs 2']);
+  });
+
   it('updates caption track styles', () => {
     const { project, ctx } = baseProject();
     const p = run(project, [{ type: 'add_track', kind: 'caption', id: 'subs' }], ctx).project;

@@ -41,8 +41,11 @@ export function createTrack(draft: Project, kind: TrackKind, ctx: OpContext): Tr
     kind,
     name: nextTrackName(draft, kind),
   });
-  draft.tracks.push(track);
-  return draft.tracks[draft.tracks.length - 1]!;
+  // Keep captions on top: new non-caption tracks go below the first caption track.
+  const firstCaption = draft.tracks.findIndex((t) => t.kind === 'caption');
+  const index = kind === 'caption' || firstCaption < 0 ? draft.tracks.length : firstCaption;
+  draft.tracks.splice(index, 0, track);
+  return draft.tracks[index]!;
 }
 
 function pickTrack(

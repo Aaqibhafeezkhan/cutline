@@ -47,12 +47,23 @@ export type ClientMessage = z.output<typeof ClientMessageSchema>;
 
 // --- server → client -------------------------------------------------------
 
+/** A past change, sent with snapshots so late joiners see what happened. */
+export interface RecentChange {
+  id: string;
+  label: string;
+  origin: Origin;
+  at: string;
+  affectedIds: string[];
+}
+
 export interface SnapshotMessage {
   type: 'snapshot';
   projectId: string;
   version: number;
   project: Project;
   history: HistoryInfo;
+  /** Newest first. */
+  recent: RecentChange[];
 }
 
 export interface PatchMessage {

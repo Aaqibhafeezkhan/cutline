@@ -71,7 +71,10 @@ export function addTrack(draft: Project, op: OpOf<'add_track'>, ctx: OpContext):
     name: op.name ?? nextTrackName(draft, op.kind),
     captionStyle: op.kind === 'caption' ? CaptionStyleSchema.parse({}) : undefined,
   });
-  const index = Math.min(op.index ?? draft.tracks.length, draft.tracks.length);
+  // Default position: the top of the stack, but below caption tracks so captions stay visible.
+  const firstCaption = draft.tracks.findIndex((t) => t.kind === 'caption');
+  const top = op.kind === 'caption' || firstCaption < 0 ? draft.tracks.length : firstCaption;
+  const index = Math.min(op.index ?? top, draft.tracks.length);
   draft.tracks.splice(index, 0, track);
   return outcome(`Added ${op.kind} track ${track.name} (${id}).`, { created: [id] });
 }
