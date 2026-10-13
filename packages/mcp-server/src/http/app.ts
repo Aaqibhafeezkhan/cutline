@@ -6,11 +6,19 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
 import {
   CutlineError,
+  findAsset,
   isCutlineError,
   summarizeProject,
   wordsToCues,
   type Origin,
 } from '@cutline/core';
+import {
+  describeLoudness,
+  planDucking,
+  planLoudness,
+  type DuckOptions,
+  type LoudnessOptions,
+} from '../media/mixing';
 import { planFillerCut, transcribeTimeline } from '../media/timeline-transcript';
 import { createMcpServer } from '../mcp/server';
 import { log } from '../log';
@@ -175,6 +183,43 @@ export function createApp(services: Services): AppHandle {
     }),
   );
 
+  // Same pipelines as the MCP duck_music / normalize_loudness tools.
+  api.post(
+    '/projects/:id/audio/duck',
+    json,
+    route(async (req, res) => {
+      const id = param(req, 'id');
+      const body = (req.body ?? {}) as DuckOptions;
+      const plan = await planDucking(services, id, {
+        musicTrackId: typeof body.musicTrackId === 'string' ? body.musicTrackId : undefined,
+        voiceTrackId: typeof body.voiceTrackId === 'string' ? body.voiceTrackId : undefined,
+        amountDb: typeof body.amountDb === 'number' ? body.amountDb : undefined,
+      });
+      const result = await docs.apply(id, [plan.operation], USER, 'Duck music under speech');
+      res.json({ summary: result.summary, version: result.version, source: plan.source });
+    }),
+  );
+
+  api.post(
+    '/projects/:id/audio/normalize',
+    json,
+    route(async (req, res) => {
+      const id = param(req, 'id');
+      const body = (req.body ?? {}) as LoudnessOptions;
+      const plan = await planLoudness(services, id, {
+        clipIds: Array.isArray(body.clipIds) ? body.clipIds.map(String) : undefined,
+        trackId: typeof body.trackId === 'string' ? body.trackId : undefined,
+        target: typeof body.target === 'number' ? body.target : undefined,
+      });
+      const summary = describeLoudness(plan);
+      if (plan.operations.length === 0) {
+        throw new CutlineError('INVALID_OPERATION', 'The selected audio is silent.');
+      }
+      const result = await docs.apply(id, plan.operations, USER, 'Normalize loudness');
+      res.json({ summary, version: result.version, clips: plan.clips });
+    }),
+  );
+
   // Same pipeline as the MCP remove_filler_words tool.
   api.post(
     '/projects/:id/fillers/remove',
@@ -252,6 +297,22 @@ export function createApp(services: Services): AppHandle {
       res.sendFile(resolve(path), { acceptRanges: true, dotfiles: 'allow' }, (err) => {
         if (err && !res.headersSent) sendError(res, err);
       });
+    }),
+  );
+
+  // Beat grid of an asset in source time: GET returns an earlier result (or null), POST analyses.
+  const beatAsset = async (req: Request) =>
+    findAsset((await docs.get(param(req, 'id'))).project, param(req, 'assetId'));
+  api.get(
+    '/projects/:id/assets/:assetId/beats',
+    route(async (req, res) => {
+      res.json({ beats: await services.analysis.cachedBeats(await beatAsset(req)) });
+    }),
+  );
+  api.post(
+    '/projects/:id/assets/:assetId/beats',
+    route(async (req, res) => {
+      res.json({ beats: await services.analysis.beats(await beatAsset(req)) });
     }),
   );
 

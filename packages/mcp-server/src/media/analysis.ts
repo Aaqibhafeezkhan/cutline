@@ -9,7 +9,8 @@ import {
   type Word,
 } from '@cutline/core';
 import type { BlobStore } from '../storage/types';
-import type { Ffmpeg } from './ffmpeg';
+import { BEAT_SAMPLE_RATE, detectBeats, type BeatAnalysis, type BeatOptions } from './beats';
+import type { Ffmpeg, Loudness } from './ffmpeg';
 import type { Transcriber, TranscribeOptions } from './transcribe';
 
 const ENVELOPE_WINDOW = 0.01;
@@ -86,6 +87,67 @@ export class AnalysisService {
     return this.cached(`cache/${asset.id}/transcript-${variant}.json`, async () =>
       this.transcriber.transcribe(await this.pcm(asset, options.signal), options),
     );
+  }
+
+  /** A transcript that is already cached (auto-detected language), without transcribing. */
+  async cachedTranscript(asset: Asset): Promise<Word[] | null> {
+    const variant = createHash('sha1')
+      .update(`${this.transcriber.id}|auto`)
+      .digest('hex')
+      .slice(0, 10);
+    const key = `cache/${asset.id}/transcript-${variant}.json`;
+    if (!(await this.blobs.stat(key))) return null;
+    return this.cached<Word[]>(key, () => Promise.reject(new Error('cache entry vanished')));
+  }
+
+  /** EBU R128 loudness of a source window of an asset (cached per window). */
+  async loudness(
+    asset: Asset,
+    start: number,
+    duration: number,
+    signal?: AbortSignal,
+  ): Promise<Loudness> {
+    if (!asset.hasAudio) {
+      throw new CutlineError('INVALID_ARGUMENT', `Asset "${asset.name}" has no audio.`);
+    }
+    const ms = (s: number) => Math.round(s * 1000);
+    return this.cached(`cache/${asset.id}/loudness-${ms(start)}-${ms(duration)}.json`, async () =>
+      this.ffmpeg.loudness(await this.blobs.localPath(asset.src), start, duration, signal),
+    );
+  }
+
+  private beatKey(asset: Asset, options: BeatOptions): string {
+    return `cache/${asset.id}/beats-${options.minBpm ?? 60}-${options.maxBpm ?? 200}.json`;
+  }
+
+  /** Tempo and beat grid of an asset's audio in source time. */
+  async beats(
+    asset: Asset,
+    options: BeatOptions = {},
+    signal?: AbortSignal,
+  ): Promise<BeatAnalysis> {
+    if (!asset.hasAudio) {
+      throw new CutlineError('INVALID_ARGUMENT', `Asset "${asset.name}" has no audio.`, {
+        hint: 'Detect beats on a music or video asset that has an audio stream.',
+      });
+    }
+    return this.cached(this.beatKey(asset, options), async () =>
+      detectBeats(
+        await this.ffmpeg.decodePcm(
+          await this.blobs.localPath(asset.src),
+          BEAT_SAMPLE_RATE,
+          signal,
+        ),
+        BEAT_SAMPLE_RATE,
+        options,
+      ),
+    );
+  }
+
+  /** Beats computed earlier with the default BPM range, without analysing anything new. */
+  async cachedBeats(asset: Asset): Promise<BeatAnalysis | null> {
+    if (!asset.hasAudio || !(await this.blobs.stat(this.beatKey(asset, {})))) return null;
+    return this.beats(asset);
   }
 
   /** Scene cut timestamps in source time. */

@@ -1,3 +1,4 @@
+import { sliceDuck } from './ducking';
 import { CutlineError } from './errors';
 import { sliceAllKeyframes } from './keyframes';
 import type { Asset, Clip, Word } from './schema';
@@ -29,7 +30,12 @@ export function sliceClip<C extends Clip>(clip: C, from: number, to: number): C 
   const next = cloneClip(clip) as Clip;
   next.start = roundTime(clip.start + from);
   next.duration = roundTime(to - from);
-  if (hasSource(next)) next.sourceStart = roundTime(next.sourceStart + from);
+  if (hasSource(next)) {
+    next.sourceStart = roundTime(next.sourceStart + from);
+    const duck = sliceDuck(next.duck, from, to);
+    if (duck) next.duck = duck;
+    else delete next.duck;
+  }
   if (next.type !== 'caption') {
     const kf = sliceAllKeyframes(next.keyframes, from, to);
     if (kf) next.keyframes = kf;

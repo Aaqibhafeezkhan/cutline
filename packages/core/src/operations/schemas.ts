@@ -369,6 +369,35 @@ export const SetVolumeOpSchema = z
     message: 'give exactly one of clipId or trackId',
   });
 
+export const DuckAudioOpSchema = z.object({
+  type: z.literal('duck_audio'),
+  trackId: IdSchema.describe('Track whose clips get quieter, usually the music'),
+  ranges: z
+    .array(RangeSchema)
+    .max(2000)
+    .describe(
+      'Timeline ranges (e.g. speech) during which the track is ducked. Replaces earlier ducking; [] removes it',
+    ),
+  amountDb: z
+    .number()
+    .min(-60)
+    .max(0)
+    .default(-12)
+    .describe('Gain change while ducked in dB (default -12)'),
+  attack: z
+    .number()
+    .min(0.01)
+    .max(5)
+    .default(0.15)
+    .describe('Seconds to ramp down before each range (default 0.15)'),
+  release: z
+    .number()
+    .min(0.01)
+    .max(10)
+    .default(0.4)
+    .describe('Seconds to ramp back up after each range (default 0.4)'),
+});
+
 export const OperationSchema = z.discriminatedUnion('type', [
   UpdateProjectOpSchema,
   AddAssetOpSchema,
@@ -390,6 +419,7 @@ export const OperationSchema = z.discriminatedUnion('type', [
   SetTransitionOpSchema,
   SetAnimationOpSchema,
   SetVolumeOpSchema,
+  DuckAudioOpSchema,
   SetBrandOpSchema,
   AddLogoOpSchema,
 ]);

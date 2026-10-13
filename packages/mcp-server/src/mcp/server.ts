@@ -2,8 +2,10 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { VERSION } from '../version';
 import type { Services } from '../services';
 import { ToolContext, type SessionInfo } from './context';
+import { registerAudioTools } from './tools/audio';
 import { registerBrandTools } from './tools/brand';
 import { registerEditingTools } from './tools/editing';
+import { registerMusicTools } from './tools/music';
 import { registerOutputTools } from './tools/output';
 import { registerPerceptionTools } from './tools/perception';
 
@@ -15,7 +17,9 @@ How to work:
 - Ids (clip_…, track_…, asset_…) come from tool results; call get_project again when unsure, since ranges and ids change after cuts.
 - To remove silences: detect_silence, then delete_range with the returned ranges (it ripples all tracks so audio, video and captions stay in sync).
 - To remove "um"/"uh"/"äh" fillers from speech: remove_filler_words (dryRun=true first to review).
+- To cut to music: cut_to_beats lays the footage out so every cut lands on a beat (detect_beats shows tempo and beat times).
 - To add subtitles: add_captions with fromTranscript=true (do this AFTER cutting, so captions match the final timing).
+- For background music: duck_music lowers it under speech; normalize_loudness evens out clip levels (-14 LUFS by default).
 - For on-brand graphics: set_brand_kit once (colors, fonts, logo), then add_template / add_text_overlay / add_shape use it by default; add_template with template "logo" places the logo.
 - To check your work: get_frames (look at stills), get_waveform_summary, get_transcript.
 - Finish with export_video (server-side MP4) and give the user the download URL.
@@ -32,6 +36,8 @@ export function createMcpServer(services: Services, session: SessionInfo): McpSe
   registerEditingTools(server, ctx);
   registerBrandTools(server, ctx);
   registerPerceptionTools(server, ctx);
+  registerMusicTools(server, ctx);
   registerOutputTools(server, ctx);
+  registerAudioTools(server, ctx);
   return server;
 }

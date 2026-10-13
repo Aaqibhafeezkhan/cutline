@@ -213,9 +213,24 @@ const visual = {
   ...fades,
 };
 
+/**
+ * Automatic volume reduction ("ducking"), e.g. music under speech. The gain
+ * envelope is computed by the resolver, so it follows trims, splits and moves.
+ */
+export const DuckingSchema = z.object({
+  ranges: z
+    .array(z.object({ start: z.number().finite(), end: z.number().finite() }))
+    .max(2000)
+    .describe('Ducked ranges in seconds relative to the clip start (may reach past its edges)'),
+  amountDb: z.number().min(-60).max(0).default(-12).describe('Gain change while ducked, dB'),
+  attack: z.number().min(0.01).max(5).default(0.15).describe('Ramp-down seconds before a range'),
+  release: z.number().min(0.01).max(10).default(0.4).describe('Ramp-up seconds after a range'),
+});
+
 const audible = {
   volume: z.number().min(0).max(4).default(1).describe('Linear gain, 1 = unchanged'),
   muted: z.boolean().default(false),
+  duck: DuckingSchema.optional(),
 };
 
 const media = {
@@ -345,6 +360,7 @@ export type Transition = z.output<typeof TransitionSchema>;
 export type TransitionType = z.output<typeof TransitionTypeSchema>;
 export type AnimationPreset = z.output<typeof AnimationPresetSchema>;
 export type Animation = z.output<typeof AnimationSchema>;
+export type Ducking = z.output<typeof DuckingSchema>;
 export type TextStyle = z.output<typeof TextStyleSchema>;
 export type CaptionStyle = z.output<typeof CaptionStyleSchema>;
 export type Word = z.output<typeof WordSchema>;

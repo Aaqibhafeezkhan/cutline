@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { applyOperations, createProject, sequentialContext } from '@cutline/core';
-import { displayTracks, rulerLabel, snap, snapBlock, snapPoints, tickStep } from './geometry';
+import {
+  beatPoints,
+  displayTracks,
+  rulerLabel,
+  snap,
+  snapBlock,
+  snapPoints,
+  tickStep,
+} from './geometry';
 
 function project() {
   const ctx = sequentialContext();
@@ -41,6 +49,36 @@ describe('timeline geometry', () => {
     expect(snap(3.05, points, 0.1)).toEqual({ time: 3, snapped: true });
     expect(snap(3.5, points, 0.1)).toEqual({ time: 3.5, snapped: false });
     expect(snap(3, points, 0.1)).toEqual({ time: 3, snapped: true });
+  });
+
+  it('turns known beat grids into timeline snap points', () => {
+    const ctx = sequentialContext();
+    const p = applyOperations(
+      project(),
+      [
+        {
+          type: 'add_asset',
+          asset: {
+            id: 'mus',
+            name: 'm',
+            kind: 'audio',
+            src: 'm',
+            mimeType: 'audio/wav',
+            duration: 10,
+            hasVideo: false,
+            hasAudio: true,
+          },
+        },
+        { type: 'add_clip', assetId: 'mus', start: 2, sourceStart: 1, duration: 3, id: 'm' },
+      ],
+      ctx,
+    ).project;
+    const beats = [0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5];
+    const grids = { mus: { beats }, img: { beats } };
+    expect(beatPoints(p, grids, [])).toEqual([2, 2.5, 3, 3.5, 4, 4.5]);
+    expect(beatPoints(p, grids, ['m'])).toEqual([]);
+    expect(beatPoints(p, {}, [])).toEqual([]);
+    expect(snapPoints(p, ['m', 'a', 'b'], 0, [2.5])).toContain(2.5);
   });
 
   it('snaps a moving block by whichever edge is closer', () => {
