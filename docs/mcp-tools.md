@@ -19,6 +19,7 @@ How to work:
 - Start with get_project (or create_project), then add_asset for media and add_clip to place it.
 - Ids (clip_…, track_…, asset_…) come from tool results; call get_project again when unsure, since ranges and ids change after cuts.
 - To remove silences: detect_silence, then delete_range with the returned ranges (it ripples all tracks so audio, video and captions stay in sync).
+- To remove "um"/"uh"/"äh" fillers from speech: remove_filler_words (dryRun=true first to review).
 - To add subtitles: add_captions with fromTranscript=true (do this AFTER cutting, so captions match the final timing).
 - For on-brand graphics: set_brand_kit once (colors, fonts, logo), then add_template / add_text_overlay / add_shape use it by default; add_template with template "logo" places the logo.
 - To check your work: get_frames (look at stills), get_waveform_summary, get_transcript.
@@ -138,6 +139,21 @@ _Annotations: destructive_
 | `ranges`    | object[] | yes      | Timeline ranges to remove, in the CURRENT timeline time                |
 | `trackIds`  | string[] |          | Only these tracks (default: all unlocked tracks)                       |
 | `ripple`    | boolean  |          | Close the gaps (default true)                                          |
+
+### `remove_filler_words`
+
+**Remove filler words.** Cut hesitation sounds ("um", "uh", "äh", "ähm", …) out of talking-head footage in one step. Transcribes the timeline audio (local Whisper, word timestamps, cached), finds the fillers and removes them with ONE delete_range (one undo step, ripples all unlocked tracks so audio, video and captions stay in sync). Matching ignores case and punctuation ("Um," matches). Default list: um, uh, uhm, uhh, er, erm, ah, hmm, hm, mhm, äh, ähm, öhm, öh. repeats=true also cuts stutters like "I I think". Use dryRun=true first to review what would be cut. Limitation: Whisper often omits disfluencies from its transcript, so fillers it did not write down cannot be found; pair with detect_silence for pauses.
+
+_Annotations: destructive_
+
+| Parameter   | Type                | Required | Description                                                               |
+| ----------- | ------------------- | -------- | ------------------------------------------------------------------------- |
+| `projectId` | string              |          | Project id. Omit to use the project you created or used most recently.    |
+| `fillers`   | string[]            |          | Words to remove; replaces the default list (case/punctuation-insensitive) |
+| `repeats`   | boolean             |          | Also cut immediate word repetitions such as "I I think" (default false)   |
+| `padding`   | number (≥ 0, ≤ 0.5) |          | Seconds also cut around each filler, never into kept words (default 0.05) |
+| `language`  | string              |          | Spoken language for transcription, e.g. "en", "de" (default: auto-detect) |
+| `dryRun`    | boolean             |          | Only report what would be cut, change nothing (default false)             |
 
 ### `set_clip_property`
 

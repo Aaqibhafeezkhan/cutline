@@ -11,7 +11,7 @@ import {
   wordsToCues,
   type Origin,
 } from '@cutline/core';
-import { transcribeTimeline } from '../media/timeline-transcript';
+import { planFillerCut, transcribeTimeline } from '../media/timeline-transcript';
 import { createMcpServer } from '../mcp/server';
 import { log } from '../log';
 import type { Services } from '../services';
@@ -172,6 +172,57 @@ export function createApp(services: Services): AppHandle {
       );
       report('finished', result.summary);
       res.json({ summary: result.summary, cueCount: cues.length, version: result.version });
+    }),
+  );
+
+  // Same pipeline as the MCP remove_filler_words tool.
+  api.post(
+    '/projects/:id/fillers/remove',
+    json,
+    route(async (req, res) => {
+      const id = param(req, 'id');
+      const body = (req.body ?? {}) as { language?: string; repeats?: boolean; dryRun?: boolean };
+      const activityId = randomUUID();
+      const report = (status: 'started' | 'progress' | 'finished' | 'failed', message: string) =>
+        docs.activity({
+          projectId: id,
+          id: activityId,
+          origin: USER,
+          tool: 'remove_filler_words',
+          status,
+          message,
+          at: new Date().toISOString(),
+        });
+      report('started', 'Transcribing the timeline audio…');
+      let words;
+      try {
+        words = await transcribeTimeline(services, id, {
+          language: typeof body.language === 'string' ? body.language : undefined,
+          progress: { update: (_f, message) => report('progress', message) },
+        });
+      } catch (err) {
+        report('failed', 'Transcription failed.');
+        throw err;
+      }
+      const plan = planFillerCut(words, { repeats: body.repeats === true });
+      const payload = { found: plan.found, ranges: plan.ranges, removedDuration: plan.removed };
+      if (plan.ranges.length === 0 || body.dryRun === true) {
+        const summary = plan.ranges.length
+          ? `Would remove ${plan.found.length} filler word(s) (${plan.removed}s).`
+          : 'No filler words found.';
+        report('finished', summary);
+        res.json({ summary, ...payload });
+        return;
+      }
+      const result = await docs.apply(
+        id,
+        [{ type: 'delete_range', ranges: plan.ranges }],
+        USER,
+        `Remove ${plan.found.length} filler word(s)`,
+      );
+      const summary = `Removed ${plan.found.length} filler word(s) (${plan.removed}s).`;
+      report('finished', summary);
+      res.json({ summary, ...payload, version: result.version });
     }),
   );
 
