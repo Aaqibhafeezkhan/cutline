@@ -12,6 +12,7 @@ export const SHORTCUTS: Array<[string[], string]> = [
   [['←', '→'], 'Previous / next frame'],
   [['Shift', '←/→'], 'Jump 1 second'],
   [['Alt', '←/→'], 'Nudge selected clips by one frame'],
+  [['←↑↓→'], 'Preview focused: move the selected overlay 1 px (Shift: 10 px)'],
   [['Home', 'End'], 'Go to start / end'],
   [['+', '−'], 'Zoom timeline in / out'],
   [['Ctrl', 'A'], 'Select all clips'],

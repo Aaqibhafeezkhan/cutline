@@ -34,6 +34,8 @@ the mouse, an agent can do with a tool call (and vice versa).
 
 - Multi-track timeline: drag, trim, split, ripple delete, zoom, snapping, keyboard shortcuts
 - WebGL preview (PixiJS) with real-time playback, decoding via WebCodecs (Mediabunny)
+- Canvas editing: click to select, drag, scale and snap overlays directly in the preview
+  (arrow keys nudge; every drag is one undo step)
 - Text overlays (sans/serif/mono, bold, italic, outline), shapes (rectangles, rounded boxes,
   ellipses), graphics templates (title, lower third, banner, callout), captions with word highlighting,
   transforms, keyframes, fades, crossfades,

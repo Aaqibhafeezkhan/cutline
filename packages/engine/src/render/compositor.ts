@@ -17,6 +17,7 @@ import type {
   TextStyle as CutlineTextStyle,
   VisualLayer,
 } from '@cutline/core';
+import { orientedBounds, type LayerBounds } from './bounds';
 import { captionTokens, layoutWords } from './caption-layout';
 import { colorMatrix, hasColorEffects } from './color';
 import { shapeMetrics } from './shape';
@@ -49,6 +50,7 @@ const PAD = 0.35; // caption/text background padding in em
 export class Compositor {
   private readonly nodes = new Map<string, Node>();
   private readonly textures = new WeakMap<object, Texture>();
+  private bounds: LayerBounds[] = [];
 
   private constructor(
     private readonly app: Application,
@@ -87,6 +89,16 @@ export class Compositor {
     return this.app.renderer.width / this.projectWidth;
   }
 
+  /** Canvas size in pixels. */
+  get size(): { width: number; height: number } {
+    return { width: this.app.renderer.width, height: this.app.renderer.height };
+  }
+
+  /** Bounds of every layer drawn in the last frame, bottom → top, in canvas pixels. */
+  get layerBounds(): readonly LayerBounds[] {
+    return this.bounds;
+  }
+
   resize(canvasWidth: number, canvasHeight: number, projectWidth: number, projectHeight: number) {
     this.projectWidth = projectWidth;
     this.projectHeight = projectHeight;
@@ -100,13 +112,23 @@ export class Compositor {
     }
     this.app.renderer.background.color = frame.background;
     const seen = new Set<string>();
+    const bounds: LayerBounds[] = [];
     frame.layers.forEach((layer, z) => {
       const node = this.nodeFor(layer);
       seen.add(layer.clipId);
       const visible = this.update(node, layer, sources);
       node.container.visible = visible;
       node.container.zIndex = z;
+      if (visible) {
+        bounds.push({
+          clipId: layer.clipId,
+          trackId: layer.trackId,
+          type: layer.type,
+          ...this.boundsOf(node),
+        });
+      }
     });
+    this.bounds = bounds;
     for (const [id, node] of this.nodes) {
       if (!seen.has(id)) {
         node.container.destroy({ children: true });
@@ -115,6 +137,29 @@ export class Compositor {
     }
     this.app.stage.sortChildren();
     this.app.render();
+  }
+
+  /** Oriented bounds of a drawn node in canvas pixels. */
+  private boundsOf(node: Node) {
+    const { sprite, container } = node;
+    if (sprite) {
+      // Media: the sprite carries the placement; its container is untransformed.
+      return {
+        centerX: sprite.position.x,
+        centerY: sprite.position.y,
+        width: sprite.width,
+        height: sprite.height,
+        rotation: sprite.rotation,
+      };
+    }
+    // Text, shapes and captions: measured content of the container, then its transform.
+    const local = container.getLocalBounds();
+    return orientedBounds(
+      { x: local.minX, y: local.minY, width: local.width, height: local.height },
+      container.position,
+      container.scale.x,
+      container.rotation,
+    );
   }
 
   private nodeFor(layer: VisualLayer): Node {

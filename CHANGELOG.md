@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Shapes: rectangles (optionally rounded) and ellipses with fill and outline, via the new `add_shape` MCP tool, toolbar buttons and a properties section; rendered in the browser and by the server renderer.
 - Graphics templates (title, lower third, banner, callout) via the `add_template` MCP tool and an "Add" menu in the editor; text button and `T` shortcut; font family, italic and outline controls for text with matching server-side fonts.
+- Canvas editing: select, move and scale video, image, text and shape overlays directly in the preview, with Shift axis lock, snapping to the frame center and edges, arrow-key nudging and agent-edit outlines; each drag commits a single `set_clip_props` (one undo step). The engine's `Player` now exposes the rendered layer bounds (`getLayerBounds()`, `getRenderedFrame()`, `onRender()`).
 
 ### Changed
 
