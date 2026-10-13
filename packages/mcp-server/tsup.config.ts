@@ -9,5 +9,7 @@ export default defineConfig({
   clean: true,
   // Internal workspace packages are TypeScript source; bundle them in.
   noExternal: [/^@cutline\//],
+  // Optional, heavy (ONNX runtime): loaded lazily at runtime when transcription is used.
+  external: ['@huggingface/transformers'],
   banner: { js: '#!/usr/bin/env node' },
 });
