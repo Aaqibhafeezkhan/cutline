@@ -19,6 +19,7 @@ import {
   placeMedia,
   placeText,
   segmentsInWindow,
+  shapeMetrics,
   sourceWindow,
 } from '../src/pure';
 
@@ -208,6 +209,27 @@ describe('export plan', () => {
       end: 4,
       totalFrames: 30,
       container: 'webm',
+    });
+  });
+});
+
+describe('shape metrics', () => {
+  it('scales to canvas pixels and clamps radius and stroke', () => {
+    const shape = {
+      kind: 'rectangle' as const,
+      width: 200,
+      height: 100,
+      fill: '#fff',
+      strokeColor: '#000',
+      strokeWidth: 400,
+      cornerRadius: 80,
+    };
+    expect(shapeMetrics(shape, 0.5)).toEqual({ w: 100, h: 50, r: 25, stroke: 25 });
+    expect(shapeMetrics({ ...shape, strokeWidth: 4, cornerRadius: 10 }, 1)).toEqual({
+      w: 200,
+      h: 100,
+      r: 10,
+      stroke: 4,
     });
   });
 });
