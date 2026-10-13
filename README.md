@@ -13,7 +13,7 @@
   <a href="https://github.com/Aepzie/cutline/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/Aepzie/cutline/actions/workflows/ci.yml/badge.svg"></a>
   <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
   <img alt="TypeScript strict" src="https://img.shields.io/badge/TypeScript-strict-3178c6.svg">
-  <img alt="MCP" src="https://img.shields.io/badge/MCP-26%20tools-8a63d2.svg">
+  <img alt="MCP" src="https://img.shields.io/badge/MCP-27%20tools-8a63d2.svg">
 </p>
 
 > 🎬 _Demo GIF placeholder: Claude removes silences and adds captions while the timeline updates live. (Contributions welcome: record one with `pnpm --filter @cutline/mcp-server demo`.)_
@@ -36,7 +36,8 @@ the mouse, an agent can do with a tool call (and vice versa).
 - WebGL preview (PixiJS) with real-time playback, decoding via WebCodecs (Mediabunny)
 - Canvas editing: click to select, drag, scale and snap overlays directly in the preview
   (arrow keys nudge; every drag is one undo step)
-- Text overlays, shapes (rectangles, rounded boxes, ellipses), captions with word highlighting,
+- Text overlays (sans/serif/mono, bold, italic, outline), shapes (rectangles, rounded boxes,
+  ellipses), graphics templates (title, lower third, banner, callout), captions with word highlighting,
   transforms, keyframes, fades, crossfades,
   dip-to-black, brightness/contrast/saturation/blur
 - Entrance/exit animation presets (fade, slide, zoom, pop) for overlays, no keyframing needed
@@ -46,12 +47,12 @@ the mouse, an agent can do with a tool call (and vice versa).
 - Shared undo/redo: undo the agent's change, or let the agent undo yours
 - Export in the browser (WebCodecs in a Web Worker, MP4 H.264/AAC) or on the server (ffmpeg)
 
-**MCP server (26 tools)**
+**MCP server (27 tools)**
 
 - **Editing:** `create_project`, `get_project`, `add_asset`, `add_clip`, `split_clip`, `trim_clip`,
   `move_clip`, `delete_clip`, `delete_range`, `set_clip_property`, `animate_clip`,
-  `add_text_overlay`, `add_shape`, `add_captions`, `add_transition`, `set_audio_volume`,
-  `apply_operations`, `undo`, `redo`
+  `add_text_overlay`, `add_shape`, `add_template`, `add_captions`, `add_transition`,
+  `set_audio_volume`, `apply_operations`, `undo`, `redo`
 - **Perception** (so the agent isn't editing blind): `get_transcript` (word timestamps, local
   Whisper), `get_frames` (composited thumbnails), `detect_silence`, `detect_scenes`,
   `get_waveform_summary`

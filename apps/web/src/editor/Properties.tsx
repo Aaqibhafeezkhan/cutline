@@ -13,6 +13,13 @@ import { useEditor } from '@/lib/store';
 import { AnimationSection } from './AnimationSection';
 import { ColorField, Field, NumberField, Section, SliderField } from './fields';
 
+/** Generic families: the server renderer maps them to matching font files. */
+const FONT_FAMILIES = [
+  { value: 'sans-serif', label: 'Sans serif' },
+  { value: 'serif', label: 'Serif' },
+  { value: 'monospace', label: 'Monospace' },
+];
+
 function findClip(id: string | undefined) {
   const project = useEditor.getState().project;
   if (!id || !project) return null;
@@ -261,6 +268,18 @@ function TextSection({
               )}
             </div>
           </Field>
+          <Field label="Font">
+            <Select
+              label="Font family"
+              value={
+                FONT_FAMILIES.some((f) => f.value === clip.style.fontFamily)
+                  ? clip.style.fontFamily
+                  : 'sans-serif'
+              }
+              onValueChange={(fontFamily) => set({ style: { fontFamily } })}
+              options={FONT_FAMILIES}
+            />
+          </Field>
           <Field label="Bold">
             <Switch
               aria-label="Bold"
@@ -268,6 +287,29 @@ function TextSection({
               onCheckedChange={(bold) => set({ style: { bold } })}
             />
           </Field>
+          <Field label="Italic">
+            <Switch
+              aria-label="Italic"
+              checked={clip.style.italic}
+              onCheckedChange={(italic) => set({ style: { italic } })}
+            />
+          </Field>
+          <NumberField
+            label="Outline"
+            suffix="px"
+            min={0}
+            max={50}
+            step={1}
+            value={clip.style.strokeWidth}
+            onCommit={(strokeWidth) => set({ style: { strokeWidth } })}
+          />
+          {clip.style.strokeWidth > 0 && (
+            <ColorField
+              label="Outline color"
+              value={clip.style.strokeColor}
+              onCommit={(strokeColor) => set({ style: { strokeColor } })}
+            />
+          )}
           <Field label="Align">
             <Select
               label="Text alignment"

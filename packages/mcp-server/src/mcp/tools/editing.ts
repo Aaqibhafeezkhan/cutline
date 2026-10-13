@@ -10,10 +10,13 @@ import {
   DurationSchema,
   IdSchema,
   OperationSchema,
+  TEMPLATE_LABELS,
+  TemplateParamsSchema,
   TextStylePatchSchema,
   TimeSchema,
   TransformPatchSchema,
   summarizeProject,
+  templateOperations,
   wordsToCues,
   type Word,
 } from '@cutline/core';
@@ -480,6 +483,35 @@ export function registerEditingTools(server: McpServer, ctx: ToolContext): void 
         ...editPayload(id, result),
         clipId: result.createdIds.find((c) => c.startsWith('clip')),
       });
+    }),
+  );
+
+  server.registerTool(
+    'add_template',
+    {
+      title: 'Add graphics template',
+      description:
+        'Add ready-made on-screen graphics in one undo step: "title" (big centered heading with accent line, optional subtitle), "lower-third" (name bar at the bottom left, subtitle for role/location), "banner" (full-width bar at the top) or "callout" (outlined box with a label to highlight something). Built from shapes and text, so every part can be edited afterwards.',
+      inputSchema: TemplateParamsSchema.extend({ projectId }),
+    },
+    guard(async (args) => {
+      const id = await ctx.projectId(args.projectId);
+      const { project } = await docs.get(id);
+      const { projectId: _ignored, ...params } = args;
+      const ops = templateOperations(params, project.settings);
+      const result = await docs.apply(
+        id,
+        ops,
+        ctx.origin(),
+        `Add ${TEMPLATE_LABELS[params.template].toLowerCase()}`,
+      );
+      return ok(
+        `Added a ${TEMPLATE_LABELS[params.template].toLowerCase()} (${result.createdIds.filter((c) => c.startsWith('clip')).length} clips).`,
+        {
+          ...editPayload(id, result),
+          clipIds: result.createdIds.filter((c) => c.startsWith('clip')),
+        },
+      );
     }),
   );
 

@@ -28,7 +28,7 @@ export interface GraphOptions {
   /** Writes text to a temp file and returns its path (drawtext textfile=). */
   textFile: (content: string) => string;
   /** Font file for drawtext per style; undefined falls back to fontconfig family names. */
-  fontFile?: (bold: boolean, italic: boolean) => string | undefined;
+  fontFile?: (family: string, bold: boolean, italic: boolean) => string | undefined;
 }
 
 export interface RenderGraph {
@@ -199,7 +199,7 @@ function fontOption(
   italic: boolean,
   fontFile?: GraphOptions['fontFile'],
 ): string {
-  const file = fontFile?.(bold, italic);
+  const file = fontFile?.(family, bold, italic);
   if (file) return `fontfile=${filterPath(file)}`;
   const generic: Record<string, string> = {
     'sans-serif': 'Sans',

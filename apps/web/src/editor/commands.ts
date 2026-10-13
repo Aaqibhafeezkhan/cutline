@@ -1,4 +1,10 @@
-import { clipEnd, type OperationInput } from '@cutline/core';
+import {
+  TEMPLATE_LABELS,
+  clipEnd,
+  templateOperations,
+  type OperationInput,
+  type TemplateKind,
+} from '@cutline/core';
 import { toast } from 'sonner';
 import { currentTime } from '@/lib/player-bridge';
 import { useEditor } from '@/lib/store';
@@ -81,4 +87,43 @@ function selectNewest(type: string): void {
     .flatMap((t) => t.clips)
     .find((c) => c.type === type && created.includes(c.id))?.id;
   if (id) select([id]);
+}
+
+/** Adds a text overlay at the playhead and selects it. */
+export async function addText(): Promise<void> {
+  const { project, dispatch } = useEditor.getState();
+  if (!project) return;
+  const ok = await dispatch([
+    {
+      type: 'add_text',
+      text: 'Text',
+      start: currentTime(),
+      duration: 3,
+      style: { fontSize: Math.round(project.settings.height * 0.08) },
+    },
+  ]);
+  if (ok) selectNewest('text');
+}
+
+const TEMPLATE_DEFAULTS: Record<TemplateKind, { text: string; subtitle?: string }> = {
+  title: { text: 'Title', subtitle: 'Subtitle' },
+  'lower-third': { text: 'Name Surname', subtitle: 'Role or location' },
+  banner: { text: 'Breaking news' },
+  callout: { text: 'Look here' },
+};
+
+/** Adds a graphics template (one undo step) at the playhead and selects its clips. */
+export async function addTemplate(template: TemplateKind): Promise<void> {
+  const { project, dispatch, select } = useEditor.getState();
+  if (!project) return;
+  const ops = templateOperations(
+    { template, ...TEMPLATE_DEFAULTS[template], start: currentTime() },
+    project.settings,
+  );
+  if (!(await dispatch(ops, `Add ${TEMPLATE_LABELS[template].toLowerCase()}`))) return;
+  const { project: next, activity } = useEditor.getState();
+  const created = new Set(activity[0]?.affectedIds ?? []);
+  select(
+    (next?.tracks ?? []).flatMap((t) => t.clips.filter((c) => created.has(c.id)).map((c) => c.id)),
+  );
 }
