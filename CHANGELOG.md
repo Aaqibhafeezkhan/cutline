@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Shapes: rectangles (optionally rounded) and ellipses with fill and outline, via the new `add_shape` MCP tool, toolbar buttons and a properties section; rendered in the browser and by the server renderer.
+
 ## [0.1.0] - 2026-10-13
 
 First public release: a browser video editor that AI agents can drive over MCP while a human
