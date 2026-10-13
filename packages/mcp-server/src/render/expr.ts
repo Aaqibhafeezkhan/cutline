@@ -67,6 +67,19 @@ export function multiply(a: readonly Point[], b: readonly Point[]): Point[] {
   return times.map((t) => ({ t, v: evaluate(a, t) * evaluate(b, t) }));
 }
 
+/** Adds two piecewise-linear functions (samples at the union of breakpoints); empty = 0. */
+export function add(a: readonly Point[], b: readonly Point[]): Point[] {
+  if (a.length === 0) return [...b];
+  if (b.length === 0) return [...a];
+  const times = [...new Set([...a, ...b].map((p) => p.t))].sort((x, y) => x - y);
+  return times.map((t) => ({ t, v: evaluate(a, t) + evaluate(b, t) }));
+}
+
+/** True if the function has the same value everywhere (or no points). */
+export function isConstant(points: readonly Point[]): boolean {
+  return points.every((p) => p.v === points[0]!.v);
+}
+
 export function evaluate(points: readonly Point[], t: number): number {
   const first = points[0];
   if (!first) return 1;
