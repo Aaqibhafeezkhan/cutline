@@ -11,6 +11,13 @@ import {
   wordsToCues,
   type Origin,
 } from '@cutline/core';
+import {
+  describeLoudness,
+  planDucking,
+  planLoudness,
+  type DuckOptions,
+  type LoudnessOptions,
+} from '../media/mixing';
 import { transcribeTimeline } from '../media/timeline-transcript';
 import { createMcpServer } from '../mcp/server';
 import { log } from '../log';
@@ -172,6 +179,43 @@ export function createApp(services: Services): AppHandle {
       );
       report('finished', result.summary);
       res.json({ summary: result.summary, cueCount: cues.length, version: result.version });
+    }),
+  );
+
+  // Same pipelines as the MCP duck_music / normalize_loudness tools.
+  api.post(
+    '/projects/:id/audio/duck',
+    json,
+    route(async (req, res) => {
+      const id = param(req, 'id');
+      const body = (req.body ?? {}) as DuckOptions;
+      const plan = await planDucking(services, id, {
+        musicTrackId: typeof body.musicTrackId === 'string' ? body.musicTrackId : undefined,
+        voiceTrackId: typeof body.voiceTrackId === 'string' ? body.voiceTrackId : undefined,
+        amountDb: typeof body.amountDb === 'number' ? body.amountDb : undefined,
+      });
+      const result = await docs.apply(id, [plan.operation], USER, 'Duck music under speech');
+      res.json({ summary: result.summary, version: result.version, source: plan.source });
+    }),
+  );
+
+  api.post(
+    '/projects/:id/audio/normalize',
+    json,
+    route(async (req, res) => {
+      const id = param(req, 'id');
+      const body = (req.body ?? {}) as LoudnessOptions;
+      const plan = await planLoudness(services, id, {
+        clipIds: Array.isArray(body.clipIds) ? body.clipIds.map(String) : undefined,
+        trackId: typeof body.trackId === 'string' ? body.trackId : undefined,
+        target: typeof body.target === 'number' ? body.target : undefined,
+      });
+      const summary = describeLoudness(plan);
+      if (plan.operations.length === 0) {
+        throw new CutlineError('INVALID_OPERATION', 'The selected audio is silent.');
+      }
+      const result = await docs.apply(id, plan.operations, USER, 'Normalize loudness');
+      res.json({ summary, version: result.version, clips: plan.clips });
     }),
   );
 

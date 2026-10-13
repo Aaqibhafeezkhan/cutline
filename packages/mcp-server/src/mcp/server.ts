@@ -2,6 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { VERSION } from '../version';
 import type { Services } from '../services';
 import { ToolContext, type SessionInfo } from './context';
+import { registerAudioTools } from './tools/audio';
 import { registerEditingTools } from './tools/editing';
 import { registerOutputTools } from './tools/output';
 import { registerPerceptionTools } from './tools/perception';
@@ -14,6 +15,7 @@ How to work:
 - Ids (clip_…, track_…, asset_…) come from tool results; call get_project again when unsure, since ranges and ids change after cuts.
 - To remove silences: detect_silence, then delete_range with the returned ranges (it ripples all tracks so audio, video and captions stay in sync).
 - To add subtitles: add_captions with fromTranscript=true (do this AFTER cutting, so captions match the final timing).
+- For background music: duck_music lowers it under speech; normalize_loudness evens out clip levels (-14 LUFS by default).
 - To check your work: get_frames (look at stills), get_waveform_summary, get_transcript.
 - Finish with export_video (server-side MP4) and give the user the download URL.
 - Everything is undoable (undo/redo), including the human's edits. apply_operations batches many edits into one undo step.
@@ -29,5 +31,6 @@ export function createMcpServer(services: Services, session: SessionInfo): McpSe
   registerEditingTools(server, ctx);
   registerPerceptionTools(server, ctx);
   registerOutputTools(server, ctx);
+  registerAudioTools(server, ctx);
   return server;
 }

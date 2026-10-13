@@ -1,4 +1,5 @@
 import { animationAt, type FrameSize } from './animation';
+import { duckBreakpoints, duckGain } from './ducking';
 import { animatedValue } from './keyframes';
 import { ADJACENT_TOLERANCE, previousAdjacent } from './queries';
 import {
@@ -282,7 +283,8 @@ export function resolveAudioSegments(project: Project): AudioSegment[] {
 
       const gainFn = (t: number) => {
         const local = clamp(t - clip.start, 0, clip.duration);
-        const vol = animatedValue(clip.keyframes, 'volume', clip.volume, local);
+        const vol =
+          animatedValue(clip.keyframes, 'volume', clip.volume, local) * duckGain(clip.duck, local);
         const tf = transitionFactor(track, clip, t, 'audio');
         return (
           vol * track.volume * fadeFactor(local, clip.duration, clip.fadeIn, clip.fadeOut) * tf
@@ -305,6 +307,7 @@ export function resolveAudioSegments(project: Project): AudioSegment[] {
         add(clipEnd(clip) - nin.duration / 2);
         add(clipEnd(clip) + nin.duration / 2);
       }
+      for (const b of duckBreakpoints(clip.duck)) add(clip.start + b);
       const kf = clip.keyframes?.volume ?? [];
       kf.forEach((k, i) => {
         add(clip.start + k.time);

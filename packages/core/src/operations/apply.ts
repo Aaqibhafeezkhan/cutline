@@ -5,6 +5,7 @@ import { defaultContext, type OpContext } from '../ids';
 import { toJsonPatch, type JsonPatchOperation } from '../patch';
 import type { Project } from '../schema';
 import { assertValid } from '../validate';
+import { duckAudio } from './audio';
 import {
   addClip,
   deleteClips,
@@ -53,6 +54,7 @@ const HANDLERS: { [K in OperationType]: Handler<K> } = {
   set_transition: setTransition,
   set_animation: setAnimation,
   set_volume: setVolume,
+  duck_audio: duckAudio,
 };
 
 export function parseOperation(input: unknown): Operation {

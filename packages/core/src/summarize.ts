@@ -16,6 +16,8 @@ export interface ClipSummary {
   shape?: string;
   volume?: number;
   muted?: boolean;
+  /** Automatic ducking, e.g. "-12 dB in 4 range(s)". */
+  ducked?: string;
   transitionIn?: string;
   /** Entrance/exit presets, e.g. "in fade 0.5s, out slide-left 0.5s". */
   animation?: string;
@@ -35,6 +37,7 @@ function summarizeClip(clip: Clip, assetNames: Map<string, string>): ClipSummary
     s.source = [r3(clip.sourceStart), r3(clip.sourceStart + clip.duration)];
     if (clip.volume !== 1) s.volume = clip.volume;
     if (clip.muted) s.muted = true;
+    if (clip.duck) s.ducked = `${clip.duck.amountDb} dB in ${clip.duck.ranges.length} range(s)`;
   }
   if (clip.type === 'text' || clip.type === 'caption') s.text = clip.text;
   if (clip.type === 'shape') {

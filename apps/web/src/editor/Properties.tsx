@@ -1,14 +1,20 @@
 import { useEffect, useState } from 'react';
+import { AudioLines, Gauge, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 import {
   clipEnd,
+  type AudioClip,
   type Clip,
   type ClipPropsPatch,
   type OperationInput,
   type ShapeClip,
   type TextClip,
+  type VideoClip,
 } from '@cutline/core';
+import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/input';
 import { Select, Switch } from '@/components/ui/misc';
+import { api } from '@/lib/api';
 import { useEditor } from '@/lib/store';
 import { AnimationSection } from './AnimationSection';
 import { ColorField, Field, NumberField, Section, SliderField } from './fields';
@@ -92,23 +98,7 @@ export function Properties() {
         </>
       )}
       {(clip.type === 'video' || clip.type === 'audio') && (
-        <Section title="Audio">
-          <SliderField
-            label="Volume"
-            min={0}
-            max={2}
-            step={0.01}
-            value={clip.volume}
-            onCommit={(volume) => set({ volume })}
-          />
-          <Field label="Muted">
-            <Switch
-              checked={clip.muted}
-              onCheckedChange={(muted) => set({ muted })}
-              aria-label="Mute clip"
-            />
-          </Field>
-        </Section>
+        <AudioSection clip={clip} trackId={track.id} set={set} run={run} />
       )}
       {clip.type !== 'caption' && (
         <Section title="Fades">
@@ -131,6 +121,93 @@ export function Properties() {
         </Section>
       )}
     </div>
+  );
+}
+
+function AudioSection({
+  clip,
+  trackId,
+  set,
+  run,
+}: {
+  clip: AudioClip | VideoClip;
+  trackId: string;
+  set: (p: ClipPropsPatch) => void;
+  run: (ops: OperationInput[]) => void;
+}) {
+  const projectId = useEditor((s) => s.projectId);
+  const [busy, setBusy] = useState<'duck' | 'normalize' | null>(null);
+  const call = async (kind: 'duck' | 'normalize') => {
+    if (!projectId) return;
+    setBusy(kind);
+    try {
+      const r =
+        kind === 'duck'
+          ? await api.duckMusic(projectId, trackId)
+          : await api.normalizeLoudness(projectId, [clip.id]);
+      toast.success(r.summary);
+    } catch (err) {
+      toast.error(kind === 'duck' ? 'Could not duck the music' : 'Could not normalize loudness', {
+        description: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      setBusy(null);
+    }
+  };
+  return (
+    <Section title="Audio">
+      <SliderField
+        label="Volume"
+        min={0}
+        max={2}
+        step={0.01}
+        value={clip.volume}
+        onCommit={(volume) => set({ volume })}
+      />
+      <Field label="Muted">
+        <Switch
+          checked={clip.muted}
+          onCheckedChange={(muted) => set({ muted })}
+          aria-label="Mute clip"
+        />
+      </Field>
+      {clip.duck && (
+        <Field label="Ducking">
+          <span className="flex items-center gap-2 text-xs text-muted">
+            {clip.duck.amountDb} dB, {clip.duck.ranges.length} range(s)
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => run([{ type: 'duck_audio', trackId, ranges: [] }])}
+            >
+              Remove
+            </Button>
+          </span>
+        </Field>
+      )}
+      <div className="flex flex-wrap gap-1">
+        <Button
+          size="sm"
+          variant="secondary"
+          disabled={busy !== null}
+          title="Lower this track while someone speaks on the other tracks"
+          onClick={() => void call('duck')}
+        >
+          {busy === 'duck' ? <Loader2 className="animate-spin" /> : <AudioLines />} Duck under
+          speech
+        </Button>
+        <Button
+          size="sm"
+          variant="secondary"
+          disabled={busy !== null}
+          title="Set the volume so this clip plays at -14 LUFS"
+          onClick={() => void call('normalize')}
+        >
+          {busy === 'normalize' ? <Loader2 className="animate-spin" /> : <Gauge />} Normalize
+          loudness
+        </Button>
+      </div>
+    </Section>
   );
 }
 
