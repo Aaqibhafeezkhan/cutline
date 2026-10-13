@@ -1,0 +1,21 @@
+{
+  "name": "@cutline/engine",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Cutline browser rendering engine: WebCodecs + Mediabunny decode/encode, PixiJS compositing, Web Audio mixing.",
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@cutline/core": "workspace:*",
+    "mediabunny": "^1.61.4",
+    "pixi.js": "^8.22.0"
+  }
+}

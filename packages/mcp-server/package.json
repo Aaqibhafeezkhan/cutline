@@ -1,0 +1,35 @@
+{
+  "name": "@cutline/mcp-server",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Cutline MCP server: editing + perception tools for AI agents, WebSocket sync for the browser editor.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "cutline-mcp": "./dist/cli.js"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "dev": "tsx watch --clear-screen=false src/cli.ts",
+    "start": "node dist/cli.js",
+    "build": "tsup",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@cutline/core": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "express": "^5.3.0",
+    "mediabunny": "^1.61.4",
+    "ws": "^8.22.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/ws": "^8.18.2",
+    "tsup": "^8.5.1",
+    "tsx": "^4.23.15"
+  }
+}

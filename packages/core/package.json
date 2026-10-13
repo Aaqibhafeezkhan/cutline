@@ -1,0 +1,21 @@
+{
+  "name": "@cutline/core",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Cutline timeline schema, pure edit operations, JSON patches, undo/redo and migrations.",
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run --coverage",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "immer": "^11.1.21",
+    "zod": "^4.6.7"
+  }
+}
