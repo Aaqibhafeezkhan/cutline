@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { delimiter, resolve } from 'node:path';
+import { delimiter, dirname, join, resolve } from 'node:path';
 
 export interface CutlineConfig {
   host: string;
@@ -33,7 +33,9 @@ export function loadConfig(
   env: NodeJS.ProcessEnv = process.env,
 ): CutlineConfig {
   const port = Number(env.CUTLINE_PORT ?? 4100);
-  const dataDir = resolve(env.CUTLINE_DATA_DIR ?? '.cutline-data');
+  const dataDir = resolve(
+    env.CUTLINE_DATA_DIR ?? join(workspaceRoot() ?? process.cwd(), '.cutline-data'),
+  );
   const roots = env.CUTLINE_MEDIA_ROOTS
     ? env.CUTLINE_MEDIA_ROOTS.split(delimiter).filter(Boolean)
     : [homedir()];
@@ -59,9 +61,23 @@ export function loadConfig(
   return config;
 }
 
-/** Loads `.env` from the working directory if it exists (Node ≥ 20.12). */
-export function loadDotEnv(path = '.env'): void {
-  if (existsSync(path) && typeof process.loadEnvFile === 'function') {
-    process.loadEnvFile(path);
+/** The monorepo root (directory with pnpm-workspace.yaml) when running from a checkout. */
+export function workspaceRoot(from = process.cwd()): string | null {
+  let dir = resolve(from);
+  for (let i = 0; i < 6; i++) {
+    if (existsSync(join(dir, 'pnpm-workspace.yaml'))) return dir;
+    const parent = dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
   }
+  return null;
+}
+
+/** Loads `.env` from the working directory or the workspace root (Node ≥ 20.12). */
+export function loadDotEnv(): void {
+  if (typeof process.loadEnvFile !== 'function') return;
+  const root = workspaceRoot();
+  const candidates = ['.env', ...(root ? [join(root, '.env')] : [])];
+  const found = candidates.find((p) => existsSync(p));
+  if (found) process.loadEnvFile(found);
 }

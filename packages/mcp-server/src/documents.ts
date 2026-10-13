@@ -20,6 +20,7 @@ import {
   type OpContext,
   type Origin,
   type Project,
+  type RecentChange,
 } from '@cutline/core';
 import { log } from './log';
 import type { ProjectStore } from './storage/types';
@@ -67,7 +68,8 @@ export interface EditResult extends ApplyResult {
   history: HistoryInfo;
 }
 
-const SAVE_DELAY = 250;
+/** Short debounce: coalesces bursts of edits but keeps the data-loss window tiny. */
+const SAVE_DELAY = 100;
 
 /**
  * Owns all projects: the single source of truth. Edits are serialized per
@@ -177,6 +179,21 @@ export class DocumentService {
     const doc = await this.load(id);
     this.lastTouched = id;
     return { project: doc.project, version: doc.version, history: describeHistory(doc.history) };
+  }
+
+  /** The most recent history entries (newest first), for editors that join late. */
+  async recent(id: string, limit = 30): Promise<RecentChange[]> {
+    const doc = await this.load(id);
+    return doc.history.past
+      .slice(-limit)
+      .reverse()
+      .map(({ id: entryId, label, origin, at, affectedIds }) => ({
+        id: entryId,
+        label,
+        origin,
+        at,
+        affectedIds,
+      }));
   }
 
   /** Resolves an optional project id to a concrete one (falls back to the last used project). */

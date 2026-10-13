@@ -121,6 +121,7 @@ export class SyncHub {
             version: loaded.version,
             project: loaded.project,
             history: loaded.history,
+            recent: await this.services.docs.recent(msg.projectId),
           });
           this.send(client, {
             type: 'presence',

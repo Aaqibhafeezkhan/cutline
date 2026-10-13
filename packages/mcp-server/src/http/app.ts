@@ -4,7 +4,14 @@ import { join, resolve } from 'node:path';
 import express, { type NextFunction, type Request, type Response } from 'express';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
-import { CutlineError, isCutlineError, summarizeProject, type Origin } from '@cutline/core';
+import {
+  CutlineError,
+  isCutlineError,
+  summarizeProject,
+  wordsToCues,
+  type Origin,
+} from '@cutline/core';
+import { transcribeTimeline } from '../media/timeline-transcript';
 import { createMcpServer } from '../mcp/server';
 import { log } from '../log';
 import type { Services } from '../services';
@@ -123,6 +130,51 @@ export function createApp(services: Services): AppHandle {
     );
   }
 
+  // Same pipeline as the MCP add_captions tool with fromTranscript=true.
+  api.post(
+    '/projects/:id/captions/auto',
+    json,
+    route(async (req, res) => {
+      const id = param(req, 'id');
+      const body = (req.body ?? {}) as { language?: string; maxChars?: number };
+      const activityId = randomUUID();
+      const report = (status: 'started' | 'progress' | 'finished' | 'failed', message: string) =>
+        docs.activity({
+          projectId: id,
+          id: activityId,
+          origin: USER,
+          tool: 'add_captions',
+          status,
+          message,
+          at: new Date().toISOString(),
+        });
+      report('started', 'Transcribing the timeline audio…');
+      let words;
+      try {
+        words = await transcribeTimeline(services, id, {
+          language: body.language,
+          progress: { update: (_f, message) => report('progress', message) },
+        });
+      } catch (err) {
+        report('failed', 'Transcription failed.');
+        throw err;
+      }
+      if (words.length === 0) {
+        report('failed', 'No speech found.');
+        throw new CutlineError('INVALID_OPERATION', 'No speech found in the timeline audio.');
+      }
+      const cues = wordsToCues(words, { maxChars: body.maxChars });
+      const result = await docs.apply(
+        id,
+        [{ type: 'add_captions', cues }],
+        USER,
+        `Add ${cues.length} captions`,
+      );
+      report('finished', result.summary);
+      res.json({ summary: result.summary, cueCount: cues.length, version: result.version });
+    }),
+  );
+
   // Raw upload: body is the file; name via ?name= or X-File-Name.
   api.post(
     '/projects/:id/assets',
@@ -201,7 +253,21 @@ export function createApp(services: Services): AppHandle {
 
   // ------------------------------------------------------------- MCP (HTTP)
   const sessions = new Map<string, StreamableHTTPServerTransport>();
+  const lastSeen = new Map<string, number>();
   const mcpJson = express.json({ limit: '50mb' });
+  // Many clients never send DELETE /mcp; close sessions that have been idle for a while.
+  const IDLE_MS = 30 * 60 * 1000;
+  const sweeper = setInterval(() => {
+    const cutoff = Date.now() - IDLE_MS;
+    for (const [id, seen] of lastSeen) {
+      if (seen < cutoff) {
+        lastSeen.delete(id);
+        void sessions.get(id)?.close();
+      }
+    }
+  }, 60_000);
+  sweeper.unref();
+  const touch = (sid: unknown) => typeof sid === 'string' && lastSeen.set(sid, Date.now());
 
   app.post(
     '/mcp',
@@ -230,11 +296,13 @@ export function createApp(services: Services): AppHandle {
           sessionIdGenerator: () => randomUUID(),
           onsessioninitialized: (id) => {
             sessions.set(id, created);
+            touch(id);
           },
         });
         created.onclose = () => {
           if (created.sessionId) {
             sessions.delete(created.sessionId);
+            lastSeen.delete(created.sessionId);
             services.presence.leave(created.sessionId);
           }
         };
@@ -246,6 +314,7 @@ export function createApp(services: Services): AppHandle {
         await server.connect(created);
         transport = created;
       }
+      touch(sid);
       await transport.handleRequest(req, res, req.body);
     }),
   );
@@ -261,6 +330,7 @@ export function createApp(services: Services): AppHandle {
       });
       return;
     }
+    touch(sid);
     await transport.handleRequest(req, res);
   });
   app.get('/mcp', sessionRequest);
@@ -291,6 +361,7 @@ export function createApp(services: Services): AppHandle {
   return {
     app,
     async close() {
+      clearInterval(sweeper);
       await Promise.all([...sessions.values()].map((t) => t.close().catch(() => undefined)));
       sessions.clear();
     },

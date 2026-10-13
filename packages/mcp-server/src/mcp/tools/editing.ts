@@ -12,11 +12,11 @@ import {
   TextStylePatchSchema,
   TimeSchema,
   TransformPatchSchema,
-  mapWordsToTimeline,
   summarizeProject,
   wordsToCues,
   type Word,
 } from '@cutline/core';
+import { transcribeTimeline } from '../../media/timeline-transcript';
 import { editPayload, guard, ok, type ToolContext } from '../context';
 
 const projectId = IdSchema.optional().describe(
@@ -558,38 +558,25 @@ export function registerEditingTools(server: McpServer, ctx: ToolContext): void 
   );
 }
 
-/** Transcribes every audible asset on the timeline and maps the words to timeline time. */
+/** Timeline transcript with progress reported to the client and the editor. */
 export async function timelineWords(
   ctx: ToolContext,
   projectId: string,
   language: string | undefined,
   extra: Parameters<ReturnType<typeof guard>>[1],
 ): Promise<Word[]> {
-  const { docs, analysis } = ctx.services;
-  const { project } = await docs.get(projectId);
-  const used = new Set(
-    project.tracks.flatMap((t) =>
-      t.muted
-        ? []
-        : t.clips.flatMap((c) =>
-            (c.type === 'video' || c.type === 'audio') && !c.muted ? [c.assetId] : [],
-          ),
-    ),
-  );
-  const audible = project.assets.filter((a) => used.has(a.id) && a.hasAudio);
   const progress = ctx.progress(extra, projectId, 'get_transcript');
-  progress.start(`Transcribing ${audible.length} audio source(s)…`);
-  const byAsset = new Map<string, Word[]>();
+  progress.start('Transcribing the timeline audio…');
   try {
-    for (const [i, asset] of audible.entries()) {
-      progress.update(i / Math.max(1, audible.length), `Transcribing ${asset.name}…`);
-      byAsset.set(asset.id, await analysis.transcript(asset, { language, signal: extra.signal }));
-    }
+    const words = await transcribeTimeline(ctx.services, projectId, {
+      language,
+      signal: extra.signal,
+      progress,
+    });
+    progress.done(`Transcription finished (${words.length} words).`);
+    return words;
   } catch (err) {
     progress.fail('Transcription failed.');
     throw err;
   }
-  progress.done('Transcription finished.');
-  const latest = (await docs.get(projectId)).project;
-  return mapWordsToTimeline(latest, byAsset);
 }

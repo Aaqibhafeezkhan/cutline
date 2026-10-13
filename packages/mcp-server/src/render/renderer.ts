@@ -39,6 +39,15 @@ const PRESETS: Record<RenderQuality, { preset: string; crf: number; audio: strin
 
 const even = (n: number) => Math.max(2, Math.round(n / 2) * 2);
 
+/** ffmpeg reports per-stream output times that can step back slightly; keep progress monotonic. */
+function monotonic(report: (fraction: number) => void, duration: number) {
+  let best = 0;
+  return (seconds: number) => {
+    best = Math.max(best, Math.min(1, seconds / duration));
+    report(best);
+  };
+}
+
 /** Server-side renderer: project JSON → ffmpeg filtergraph → MP4 / JPEG. */
 export class Renderer {
   constructor(
@@ -150,7 +159,7 @@ export class Renderer {
           {
             signal: options.signal,
             onProgress: options.onProgress
-              ? (s) => options.onProgress!(Math.min(1, s / graph.duration))
+              ? monotonic(options.onProgress, graph.duration)
               : undefined,
           },
         );

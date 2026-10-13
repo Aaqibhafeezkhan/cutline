@@ -12,11 +12,12 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "dev": "tsx watch --clear-screen=false src/cli.ts",
+    "dev": "node --watch-path=src --watch-path=../core/src --import tsx src/cli.ts",
     "start": "node dist/cli.js",
     "build": "tsup",
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run",
+    "demo": "tsx scripts/demo-agent.ts",
     "docs:tools": "tsx scripts/gen-tool-docs.ts && prettier --write ../../docs/mcp-tools.md"
   },
   "dependencies": {
