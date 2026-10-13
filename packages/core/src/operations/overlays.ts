@@ -23,8 +23,9 @@ function isOverlayTrack(t: Track): boolean {
 }
 
 /**
- * The explicit track, or the top-most overlay track with room for
- * [start, end), or a new track on top (so later overlays stack above earlier ones).
+ * The explicit track, or the lowest overlay track that is above every video
+ * track with something visible during [start, end), or a new track on top.
+ * So an overlay always lands above what it overlaps (e.g. text over its box).
  */
 function overlayTrack(
   draft: Project,
@@ -41,8 +42,11 @@ function overlayTrack(
     assertEditable(track);
     return track;
   }
-  const candidates = draft.tracks.filter(isOverlayTrack).reverse();
-  const fit = candidates.find((t) => overlappingClips(t, start, end).length === 0);
+  let above = 0;
+  draft.tracks.forEach((t, i) => {
+    if (t.kind === 'video' && overlappingClips(t, start, end).length > 0) above = i + 1;
+  });
+  const fit = draft.tracks.find((t, i) => i >= above && isOverlayTrack(t));
   if (fit) return fit;
   const track = createTrack(draft, 'video', ctx);
   created.push(track.id);
