@@ -17,12 +17,23 @@ import {
 import { EPSILON, formatTime } from '../time';
 import type { ClipPropsPatch } from './schemas';
 
-const VISUAL: ClipType[] = ['video', 'image', 'text'];
+const VISUAL: ClipType[] = ['video', 'image', 'text', 'shape'];
 const AUDIBLE: ClipType[] = ['video', 'audio'];
-const FADEABLE: ClipType[] = ['video', 'audio', 'image', 'text'];
+const FADEABLE: ClipType[] = ['video', 'audio', 'image', 'text', 'shape'];
+const SHAPE: ClipType[] = ['shape'];
+/** Plain values copied as-is from the patch (applicability checked first). */
+const SHAPE_FIELDS = [
+  'shape',
+  'width',
+  'height',
+  'fill',
+  'strokeColor',
+  'strokeWidth',
+  'cornerRadius',
+] as const;
 
 const APPLIES: Record<keyof ClipPropsPatch, readonly ClipType[]> = {
-  name: ['video', 'audio', 'image', 'text', 'caption'],
+  name: ['video', 'audio', 'image', 'text', 'shape', 'caption'],
   transform: VISUAL,
   effects: VISUAL,
   keyframes: FADEABLE,
@@ -34,6 +45,13 @@ const APPLIES: Record<keyof ClipPropsPatch, readonly ClipType[]> = {
   style: ['text'],
   words: ['caption'],
   transitionIn: VISUAL,
+  shape: SHAPE,
+  width: SHAPE,
+  height: SHAPE,
+  fill: SHAPE,
+  strokeColor: SHAPE,
+  strokeWidth: SHAPE,
+  cornerRadius: SHAPE,
 };
 
 function keyframeAllowed(type: ClipType, prop: AnimatableProperty): boolean {
@@ -128,6 +146,10 @@ export function applyPropsPatch(track: Track, clip: Clip, patch: ClipPropsPatch)
   if (patch.text !== undefined) c.text = patch.text;
   if (patch.style && c.style) Object.assign(c.style, patch.style);
   if (patch.words !== undefined) c.words = patch.words;
+  const loose = c as unknown as Record<string, unknown>;
+  for (const key of SHAPE_FIELDS) {
+    if (patch[key] !== undefined) loose[key] = patch[key];
+  }
   if (patch.transitionIn !== undefined) {
     if (patch.transitionIn === null) delete c.transitionIn;
     else {

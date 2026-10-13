@@ -17,7 +17,7 @@ import {
   trimClip,
 } from './clips';
 import type { OpOutcome } from './outcome';
-import { addCaptions, addText } from './overlays';
+import { addCaptions, addShape, addText } from './overlays';
 import { OperationSchema, type OpOf, type Operation, type OperationType } from './schemas';
 import {
   addAsset,
@@ -41,6 +41,7 @@ const HANDLERS: { [K in OperationType]: Handler<K> } = {
   move_track: moveTrack,
   add_clip: addClip,
   add_text: addText,
+  add_shape: addShape,
   add_captions: addCaptions,
   split_clip: splitClipOp,
   trim_clip: trimClip,

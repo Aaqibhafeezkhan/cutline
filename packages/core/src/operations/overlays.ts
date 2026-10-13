@@ -4,6 +4,7 @@ import { findTrack, overlappingClips } from '../queries';
 import {
   CaptionClipSchema,
   CaptionStyleSchema,
+  ShapeClipSchema,
   TextClipSchema,
   type Project,
   type Track,
@@ -14,17 +15,33 @@ import { outcome, type OpOutcome } from './outcome';
 import type { OpOf } from './schemas';
 import { assertAccepts, assertEditable, emptyLog, placeClip, sortTrack } from './track-edit';
 
-function textTrackFor(
+/** Overlay clips (text, shapes) go on video tracks that hold nothing else. */
+function isOverlayTrack(t: Track): boolean {
+  return (
+    t.kind === 'video' && !t.locked && t.clips.every((c) => c.type === 'text' || c.type === 'shape')
+  );
+}
+
+/**
+ * The explicit track, or the top-most overlay track with room for
+ * [start, end), or a new track on top (so later overlays stack above earlier ones).
+ */
+function overlayTrack(
   draft: Project,
+  trackId: string | undefined,
+  type: 'text' | 'shape',
   start: number,
   end: number,
   ctx: OpContext,
   created: string[],
 ): Track {
-  // Prefer the top-most unlocked video track that only holds text and has room.
-  const candidates = draft.tracks
-    .filter((t) => t.kind === 'video' && !t.locked && t.clips.every((c) => c.type === 'text'))
-    .reverse();
+  if (trackId) {
+    const track = findTrack(draft, trackId);
+    assertAccepts(track, type);
+    assertEditable(track);
+    return track;
+  }
+  const candidates = draft.tracks.filter(isOverlayTrack).reverse();
   const fit = candidates.find((t) => overlappingClips(t, start, end).length === 0);
   if (fit) return fit;
   const track = createTrack(draft, 'video', ctx);
@@ -36,14 +53,7 @@ export function addText(draft: Project, op: OpOf<'add_text'>, ctx: OpContext): O
   const created: string[] = [];
   const start = roundTime(op.start);
   const end = start + op.duration;
-  let track: Track;
-  if (op.trackId) {
-    track = findTrack(draft, op.trackId);
-    assertAccepts(track, 'text');
-    assertEditable(track);
-  } else {
-    track = textTrackFor(draft, start, end, ctx, created);
-  }
+  const track = overlayTrack(draft, op.trackId, 'text', start, end, ctx, created);
   const id = op.id ?? ctx.newId('clip');
   const clip = TextClipSchema.parse({
     type: 'text',
@@ -64,6 +74,34 @@ export function addText(draft: Project, op: OpOf<'add_text'>, ctx: OpContext): O
   );
 }
 
+export function addShape(draft: Project, op: OpOf<'add_shape'>, ctx: OpContext): OpOutcome {
+  const created: string[] = [];
+  const start = roundTime(op.start);
+  const end = start + op.duration;
+  const track = overlayTrack(draft, op.trackId, 'shape', start, end, ctx, created);
+  const id = op.id ?? ctx.newId('clip');
+  const clip = ShapeClipSchema.parse({
+    type: 'shape',
+    id,
+    start,
+    duration: op.duration,
+    shape: op.shape,
+    width: op.width,
+    height: op.height,
+    fill: op.fill,
+    strokeColor: op.strokeColor,
+    strokeWidth: op.strokeWidth,
+    cornerRadius: op.cornerRadius,
+    transform: op.transform ?? {},
+  });
+  const log = emptyLog();
+  log.created.push(id, ...created);
+  placeClip(track, clip, op.mode, ctx, log);
+  return outcome(
+    `Added ${clip.shape} ${clip.width}×${clip.height} (${id}) at ${formatRange(start, end)} on track ${track.name}.`,
+    log,
+  );
+}
 export function addCaptions(draft: Project, op: OpOf<'add_captions'>, ctx: OpContext): OpOutcome {
   const log = emptyLog();
   let track: Track | undefined;

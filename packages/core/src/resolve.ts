@@ -8,6 +8,7 @@ import {
   type Clip,
   type Effects,
   type Project,
+  type ShapeKind,
   type TextStyle,
   type Track,
   type Transform,
@@ -19,7 +20,7 @@ import { clamp } from './time';
 export interface VisualLayer {
   clipId: string;
   trackId: string;
-  type: 'video' | 'image' | 'text' | 'caption';
+  type: 'video' | 'image' | 'text' | 'shape' | 'caption';
   /** Time relative to the clip start (may be <0 or >duration during transitions). */
   localTime: number;
   assetId?: string;
@@ -34,6 +35,18 @@ export interface VisualLayer {
   words?: Word[];
   /** Index into `words` of the word being spoken, or -1. */
   activeWord?: number;
+  /** Geometry and paint of shape layers. */
+  shape?: ShapeGeometry;
+}
+
+export interface ShapeGeometry {
+  kind: ShapeKind;
+  width: number;
+  height: number;
+  fill: string | null;
+  strokeColor: string;
+  strokeWidth: number;
+  cornerRadius: number;
 }
 
 export interface FrameDescription {
@@ -138,6 +151,16 @@ function visualLayer(
   if (clip.type === 'text') {
     layer.text = clip.text;
     layer.style = clip.style;
+  } else if (clip.type === 'shape') {
+    layer.shape = {
+      kind: clip.shape,
+      width: clip.width,
+      height: clip.height,
+      fill: clip.fill,
+      strokeColor: clip.strokeColor,
+      strokeWidth: clip.strokeWidth,
+      cornerRadius: clip.cornerRadius,
+    };
   } else {
     layer.assetId = clip.assetId;
     if (clip.type === 'video') {
