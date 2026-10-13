@@ -6,7 +6,9 @@ import {
   CaptionStyleSchema,
   ShapeClipSchema,
   TextClipSchema,
+  type Brand,
   type Project,
+  type TextStyle,
   type Track,
 } from '../schema';
 import { formatRange, roundTime } from '../time';
@@ -53,6 +55,14 @@ function overlayTrack(
   return track;
 }
 
+/** Text style defaults from the brand kit (explicit style fields win). */
+export function brandTextStyle(brand: Brand | undefined): Partial<TextStyle> {
+  const style: Partial<TextStyle> = {};
+  if (brand?.fontFamily) style.fontFamily = brand.fontFamily;
+  if (brand?.colors.text) style.color = brand.colors.text;
+  return style;
+}
+
 export function addText(draft: Project, op: OpOf<'add_text'>, ctx: OpContext): OpOutcome {
   const created: string[] = [];
   const start = roundTime(op.start);
@@ -65,7 +75,7 @@ export function addText(draft: Project, op: OpOf<'add_text'>, ctx: OpContext): O
     start,
     duration: op.duration,
     text: op.text,
-    style: op.style ?? {},
+    style: { ...brandTextStyle(draft.settings.brand), ...op.style },
     transform: op.transform ?? {},
   });
   const log = emptyLog();
@@ -84,6 +94,7 @@ export function addShape(draft: Project, op: OpOf<'add_shape'>, ctx: OpContext):
   const end = start + op.duration;
   const track = overlayTrack(draft, op.trackId, 'shape', start, end, ctx, created);
   const id = op.id ?? ctx.newId('clip');
+  const colors = draft.settings.brand?.colors;
   const clip = ShapeClipSchema.parse({
     type: 'shape',
     id,
@@ -92,8 +103,8 @@ export function addShape(draft: Project, op: OpOf<'add_shape'>, ctx: OpContext):
     shape: op.shape,
     width: op.width,
     height: op.height,
-    fill: op.fill,
-    strokeColor: op.strokeColor,
+    fill: op.fill === undefined ? colors?.primary : op.fill,
+    strokeColor: op.strokeColor ?? colors?.accent,
     strokeWidth: op.strokeWidth,
     cornerRadius: op.cornerRadius,
     transform: op.transform ?? {},

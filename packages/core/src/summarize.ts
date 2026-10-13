@@ -60,6 +60,7 @@ function summarizeClip(clip: Clip, assetNames: Map<string, string>): ClipSummary
 export function summarizeProject(project: Project, options: { maxClipsPerTrack?: number } = {}) {
   const max = options.maxClipsPerTrack ?? 200;
   const assetNames = new Map(project.assets.map((a) => [a.id, a.name]));
+  const brand = project.settings.brand;
   return {
     id: project.id,
     name: project.name,
@@ -69,6 +70,18 @@ export function summarizeProject(project: Project, options: { maxClipsPerTrack?:
       height: project.settings.height,
       fps: project.settings.fps,
     },
+    ...(brand && {
+      /** Brand kit: templates and new text/shapes use these colors and fonts by default. */
+      brand: {
+        colors: brand.colors,
+        ...(brand.fontFamily && { fontFamily: brand.fontFamily }),
+        ...(brand.headingFontFamily && { headingFontFamily: brand.headingFontFamily }),
+        ...(brand.logoAssetId && {
+          logo: `${brand.logoAssetId} (${assetNames.get(brand.logoAssetId) ?? '?'})`,
+        }),
+        ...(brand.logoPosition && { logoPosition: brand.logoPosition }),
+      },
+    }),
     assets: project.assets.map((a) => ({
       id: a.id,
       name: a.name,

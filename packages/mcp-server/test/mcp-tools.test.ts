@@ -79,6 +79,7 @@ describe('tool catalogue', () => {
         'redo',
         'render_preview',
         'set_audio_volume',
+        'set_brand_kit',
         'set_clip_property',
         'split_clip',
         'trim_clip',
@@ -178,6 +179,68 @@ describe('editing via MCP', () => {
     expect(summary.tracks.map((t) => t.name)).toContain('Music');
     const full = await okCall('get_project', { full: true });
     expect((full.project as { schemaVersion: number }).schemaVersion).toBe(1);
+  });
+
+  it('sets a brand kit that templates, text and shapes pick up', async () => {
+    await okCall('create_project', { name: 'Brand test', width: 1280, height: 720 });
+    await okCall('apply_operations', {
+      operations: [
+        {
+          type: 'add_asset',
+          asset: {
+            id: 'asset_logo',
+            name: 'logo.png',
+            kind: 'image',
+            src: 'assets/asset_logo/logo.png',
+            mimeType: 'image/png',
+            duration: null,
+            width: 400,
+            height: 200,
+            hasVideo: true,
+            hasAudio: false,
+          },
+        },
+      ],
+    });
+    const badLogo = await call('set_brand_kit', { logoAssetId: 'asset_nope' });
+    expect(badLogo.isError).toBe(true);
+    expect(JSON.stringify(badLogo.content)).toMatch(/Asset \\"asset_nope\\" not found/);
+
+    const kit = await okCall('set_brand_kit', {
+      colors: { primary: '#0f172a', accent: '#f59e0b', text: '#f8fafc' },
+      fontFamily: 'Georgia, serif',
+      headingFontFamily: 'Impact',
+      logoAssetId: 'asset_logo',
+      logoPosition: 'top-left',
+    });
+    expect(kit.brand).toMatchObject({ colors: { primary: '#0f172a' }, logoAssetId: 'asset_logo' });
+
+    const text = await okCall('add_text_overlay', { text: 'Branded', start: 0 });
+    await okCall('add_shape', { start: 0 });
+    const banner = await okCall('add_template', { template: 'banner', text: 'News', start: 0 });
+    expect(banner.clipIds).toHaveLength(2);
+    const logo = await okCall('add_template', { template: 'logo', start: 0 });
+    expect(String(logo.summary)).toMatch(/Added logo "logo\.png" .* top-left/);
+    const noText = await call('add_template', { template: 'title', start: 0 });
+    expect(JSON.stringify(noText.content)).toMatch(/needs text.*Hint: Pass text/);
+
+    const { project } = await okCall('get_project', { full: true });
+    const doc = project as {
+      tracks: Array<{ clips: Array<Record<string, unknown>> }>;
+    };
+    const clips = doc.tracks.flatMap((t) => t.clips);
+    const branded = clips.find((c) => c.id === text.clipId) as { style: Record<string, string> };
+    expect(branded.style).toMatchObject({ fontFamily: 'Georgia, serif', color: '#f8fafc' });
+    expect(clips.filter((c) => c.type === 'shape').map((c) => c.fill)).toEqual([
+      '#0f172a',
+      '#0f172a',
+    ]);
+    expect(clips.some((c) => c.type === 'image' && c.assetId === 'asset_logo')).toBe(true);
+
+    const summary = (await okCall('get_project')).project as { brand?: { logo: string } };
+    expect(summary.brand?.logo).toBe('asset_logo (logo.png)');
+    const cleared = await okCall('set_brand_kit', { reset: true });
+    expect(cleared.brand).toBeNull();
   });
 
   it('returns actionable errors', async () => {

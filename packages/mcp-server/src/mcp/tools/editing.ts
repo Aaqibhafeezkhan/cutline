@@ -416,7 +416,7 @@ export function registerEditingTools(server: McpServer, ctx: ToolContext): void 
     {
       title: 'Add text overlay',
       description:
-        'Add a text title/overlay. By default it is centered on screen on a text track above the video; use transform.y to move it (positive = down, in px at project resolution, e.g. y=400 for a lower third at 1080p).',
+        'Add a text title/overlay. By default it is centered on screen on a text track above the video; use transform.y to move it (positive = down, in px at project resolution, e.g. y=400 for a lower third at 1080p). Font and color default to the brand kit (set_brand_kit), if one is set.',
       inputSchema: z.object({
         projectId,
         text: z.string().min(1).max(2000),
@@ -456,8 +456,10 @@ export function registerEditingTools(server: McpServer, ctx: ToolContext): void 
         height: z.number().positive().max(16384).optional().describe('Pixels (default 200)'),
         fill: ColorSchema.nullable()
           .optional()
-          .describe('Fill color, null for none (default #ffffff)'),
-        strokeColor: ColorSchema.optional(),
+          .describe('Fill color, null for none (default: brand-kit primary color, else #ffffff)'),
+        strokeColor: ColorSchema.optional().describe(
+          'Outline color (default: brand-kit accent color, else #000000)',
+        ),
         strokeWidth: z
           .number()
           .min(0)
@@ -491,7 +493,7 @@ export function registerEditingTools(server: McpServer, ctx: ToolContext): void 
     {
       title: 'Add graphics template',
       description:
-        'Add ready-made on-screen graphics in one undo step: "title" (big centered heading with accent line, optional subtitle), "lower-third" (name bar at the bottom left, subtitle for role/location), "banner" (full-width bar at the top) or "callout" (outlined box with a label to highlight something). Built from shapes and text, so every part can be edited afterwards.',
+        'Add ready-made on-screen graphics in one undo step: "title" (big centered heading with accent line, optional subtitle), "lower-third" (name bar at the bottom left, subtitle for role/location), "banner" (full-width bar at the top), "callout" (outlined box with a label to highlight something) or "logo" (the brand-kit logo as an image in a corner, by default for the whole timeline; no text needed). Built from shapes, text and images, so every part can be edited afterwards. Colors and fonts come from the brand kit (set_brand_kit) unless accentColor/textColor are given.',
       inputSchema: TemplateParamsSchema.extend({ projectId }),
     },
     guard(async (args) => {
@@ -499,18 +501,12 @@ export function registerEditingTools(server: McpServer, ctx: ToolContext): void 
       const { project } = await docs.get(id);
       const { projectId: _ignored, ...params } = args;
       const ops = templateOperations(params, project.settings);
-      const result = await docs.apply(
-        id,
-        ops,
-        ctx.origin(),
-        `Add ${TEMPLATE_LABELS[params.template].toLowerCase()}`,
-      );
+      const label = TEMPLATE_LABELS[params.template].toLowerCase();
+      const result = await docs.apply(id, ops, ctx.origin(), `Add ${label}`);
+      const clipIds = result.createdIds.filter((c) => c.startsWith('clip'));
       return ok(
-        `Added a ${TEMPLATE_LABELS[params.template].toLowerCase()} (${result.createdIds.filter((c) => c.startsWith('clip')).length} clips).`,
-        {
-          ...editPayload(id, result),
-          clipIds: result.createdIds.filter((c) => c.startsWith('clip')),
-        },
+        params.template === 'logo' ? result.summary : `Added a ${label} (${clipIds.length} clips).`,
+        { ...editPayload(id, result), clipIds },
       );
     }),
   );

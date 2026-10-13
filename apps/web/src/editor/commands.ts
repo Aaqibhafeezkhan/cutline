@@ -64,6 +64,7 @@ export async function addShape(shape: 'rectangle' | 'ellipse'): Promise<void> {
   const { project, dispatch } = useEditor.getState();
   if (!project) return;
   const size = Math.round(Math.min(project.settings.width, project.settings.height) / 4);
+  const colors = project.settings.brand?.colors;
   const ok = await dispatch([
     {
       type: 'add_shape',
@@ -72,7 +73,11 @@ export async function addShape(shape: 'rectangle' | 'ellipse'): Promise<void> {
       duration: 3,
       width: shape === 'ellipse' ? size : size * 2,
       height: size,
-      fill: shape === 'ellipse' ? '#f59e0b' : '#2563eb',
+      // Brand kit colors when set (the UI has its own fallbacks instead of plain white).
+      fill:
+        shape === 'ellipse'
+          ? (colors?.accent ?? colors?.primary ?? '#f59e0b')
+          : (colors?.primary ?? '#2563eb'),
       cornerRadius: shape === 'rectangle' ? Math.round(size / 8) : 0,
     },
   ]);
@@ -105,19 +110,27 @@ export async function addText(): Promise<void> {
   if (ok) selectNewest('text');
 }
 
-const TEMPLATE_DEFAULTS: Record<TemplateKind, { text: string; subtitle?: string }> = {
+const TEMPLATE_DEFAULTS: Record<TemplateKind, { text?: string; subtitle?: string }> = {
   title: { text: 'Title', subtitle: 'Subtitle' },
   'lower-third': { text: 'Name Surname', subtitle: 'Role or location' },
   banner: { text: 'Breaking news' },
   callout: { text: 'Look here' },
+  logo: {},
 };
 
-/** Adds a graphics template (one undo step) at the playhead and selects its clips. */
+/**
+ * Adds a graphics template (one undo step) at the playhead and selects its
+ * clips. The logo template covers the whole timeline, so it starts at 0.
+ */
 export async function addTemplate(template: TemplateKind): Promise<void> {
   const { project, dispatch, select } = useEditor.getState();
   if (!project) return;
   const ops = templateOperations(
-    { template, ...TEMPLATE_DEFAULTS[template], start: currentTime() },
+    {
+      template,
+      ...TEMPLATE_DEFAULTS[template],
+      start: template === 'logo' ? 0 : currentTime(),
+    },
     project.settings,
   );
   if (!(await dispatch(ops, `Add ${TEMPLATE_LABELS[template].toLowerCase()}`))) return;

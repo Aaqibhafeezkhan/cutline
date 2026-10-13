@@ -1,18 +1,48 @@
-import { ArrowLeft, Bot, Download, Keyboard, Plug, Redo2, Undo2, User } from 'lucide-react';
+import {
+  ArrowLeft,
+  Bot,
+  Download,
+  Keyboard,
+  Palette,
+  Plug,
+  Redo2,
+  Undo2,
+  User,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tooltip } from '@/components/ui/misc';
 import { navigate } from '@/lib/router';
 import { useEditor } from '@/lib/store';
 import { cn } from '@/lib/utils';
 
+/** The brand colors as small dots, or the label "Brand" when no kit is set. */
+function BrandSwatches() {
+  const colors = useEditor((s) => s.project?.settings.brand?.colors);
+  const set = colors ? Object.values(colors).filter(Boolean).slice(0, 4) : [];
+  if (set.length === 0) return <span>Brand</span>;
+  return (
+    <span className="flex -space-x-1" aria-hidden>
+      {set.map((c, i) => (
+        <span
+          key={i}
+          className="size-3 rounded-full border border-surface"
+          style={{ backgroundColor: c }}
+        />
+      ))}
+    </span>
+  );
+}
+
 export function TopBar({
   onExport,
   onConnect,
   onShortcuts,
+  onBrand,
 }: {
   onExport: () => void;
   onConnect: () => void;
   onShortcuts: () => void;
+  onBrand: () => void;
 }) {
   const project = useEditor((s) => s.project);
   const history = useEditor((s) => s.history);
@@ -126,6 +156,12 @@ export function TopBar({
         >
           <Keyboard />
         </Button>
+        <Tooltip content="Brand kit: colors, fonts and logo for templates and new overlays">
+          <Button variant="ghost" size="sm" aria-label="Brand kit" onClick={onBrand}>
+            <Palette />
+            <BrandSwatches />
+          </Button>
+        </Tooltip>
         <Button variant="secondary" size="sm" onClick={onConnect}>
           <Plug /> Connect agent
         </Button>

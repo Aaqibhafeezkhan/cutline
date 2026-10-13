@@ -54,8 +54,14 @@ export function removeAsset(draft: Project, op: OpOf<'remove_asset'>): OpOutcome
     track.clips = track.clips.filter((c) => !removed.includes(c.id));
   }
   draft.assets = draft.assets.filter((a) => a.id !== asset.id);
+  const brand = draft.settings.brand;
+  let logoNote = '';
+  if (brand?.logoAssetId === asset.id) {
+    delete brand.logoAssetId;
+    logoNote = ' and cleared the brand logo';
+  }
   return outcome(
-    `Removed asset "${asset.name}"${removed.length ? ` and ${removed.length} clip(s)` : ''}.`,
+    `Removed asset "${asset.name}"${removed.length ? ` and ${removed.length} clip(s)` : ''}${logoNote}.`,
     { removed: [asset.id, ...removed] },
   );
 }
