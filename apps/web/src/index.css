@@ -1,5 +1,83 @@
 @import 'tailwindcss';
 
+@custom-variant dark (&:is(.dark *));
+
+@theme {
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', 'Cascadia Code', Consolas, monospace;
+
+  --color-background: oklch(0.16 0.006 270);
+  --color-surface: oklch(0.2 0.007 270);
+  --color-surface-2: oklch(0.24 0.008 270);
+  --color-border: oklch(0.3 0.01 270);
+  --color-foreground: oklch(0.95 0.005 270);
+  --color-muted: oklch(0.68 0.01 270);
+  --color-primary: oklch(0.72 0.14 230);
+  --color-primary-foreground: oklch(0.15 0.02 230);
+  --color-agent: oklch(0.72 0.19 300);
+  --color-danger: oklch(0.65 0.2 25);
+  --color-ring: oklch(0.72 0.14 230);
+
+  --color-media-video: oklch(0.52 0.12 260);
+  --color-media-image: oklch(0.5 0.1 200);
+  --color-media-audio: oklch(0.5 0.11 160);
+  --color-media-text: oklch(0.6 0.13 75);
+  --color-media-caption: oklch(0.55 0.14 350);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
 body {
-  background: #0b0d10;
+  background: var(--color-background);
+  color: var(--color-foreground);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior: none;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-ring);
+  outline-offset: 1px;
+}
+
+@keyframes agent-pulse {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 2px var(--color-agent),
+      0 0 12px 2px color-mix(in oklch, var(--color-agent) 60%, transparent);
+  }
+  50% {
+    box-shadow:
+      0 0 0 2px var(--color-agent),
+      0 0 20px 6px color-mix(in oklch, var(--color-agent) 35%, transparent);
+  }
+}
+
+.agent-highlight {
+  animation: agent-pulse 1.2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-highlight {
+    animation: none;
+    box-shadow: 0 0 0 2px var(--color-agent);
+  }
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-surface-2);
+  border-radius: 6px;
+  border: 2px solid var(--color-background);
+}
+::-webkit-scrollbar-track {
+  background: transparent;
 }
