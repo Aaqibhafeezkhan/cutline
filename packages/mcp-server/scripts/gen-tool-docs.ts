@@ -38,6 +38,7 @@ const GROUPS: Record<string, string[]> = {
     'set_clip_property',
     'add_text_overlay',
     'add_shape',
+    'add_template',
     'add_captions',
     'add_transition',
     'set_audio_volume',

@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { applyOperations, createProject, sequentialContext, type Project } from '@cutline/core';
 import { Ffmpeg } from '../src/media/ffmpeg';
 import { probeFile } from '../src/media/probe';
+import { fontGroup } from '../src/render/fonts';
 import { buildRenderGraph, wrapText } from '../src/render/graph';
 import { num, piecewise } from '../src/render/expr';
 import { Renderer } from '../src/render/renderer';
@@ -104,6 +105,15 @@ describe('expressions', () => {
         { t: 2, v: 1 },
       ]),
     ).toBe('if(lt(t,0),0,if(lt(t,2),(0+(1)*(t-0)/2),1))');
+  });
+
+  it('maps CSS font families to font groups', () => {
+    expect(fontGroup('sans-serif')).toBe('sans');
+    expect(fontGroup('Inter, system-ui, sans-serif')).toBe('sans');
+    expect(fontGroup('serif')).toBe('serif');
+    expect(fontGroup('Georgia, serif')).toBe('serif');
+    expect(fontGroup('monospace')).toBe('mono');
+    expect(fontGroup('"Courier New"')).toBe('mono');
   });
 
   it('wraps long text', () => {

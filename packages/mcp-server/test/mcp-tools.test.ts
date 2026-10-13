@@ -60,6 +60,7 @@ describe('tool catalogue', () => {
         'add_captions',
         'add_clip',
         'add_shape',
+        'add_template',
         'add_text_overlay',
         'add_transition',
         'apply_operations',
@@ -130,6 +131,15 @@ describe('editing via MCP', () => {
     expect(String(shape.summary)).toMatch(/Added ellipse 120×120/);
     const bad = await call('add_shape', { start: 0, width: -5 });
     expect(bad.isError).toBe(true);
+
+    const lower = await okCall('add_template', {
+      template: 'lower-third',
+      text: 'Ada Lovelace',
+      subtitle: 'Mathematician',
+      start: 0,
+    });
+    expect(lower.clipIds).toHaveLength(3);
+    expect(String(lower.summary)).toMatch(/Added a lower third \(3 clips\)/);
 
     const undone = await okCall('undo');
     expect(undone.summary).toMatch(/^Undid/);
