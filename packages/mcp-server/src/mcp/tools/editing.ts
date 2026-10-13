@@ -391,6 +391,51 @@ export function registerEditingTools(server: McpServer, ctx: ToolContext): void 
   );
 
   server.registerTool(
+    'add_shape',
+    {
+      title: 'Add shape',
+      description:
+        'Add a rectangle (optionally rounded) or ellipse as an overlay, e.g. a lower-third bar, a box behind text, a highlight frame (fill null + strokeWidth) or a dot. Sizes are project pixels; it is centered on screen unless transform.x/y move it (offsets from the center, positive y = down). It goes on an overlay track above the video; text added afterwards at the same time stacks above it.',
+      inputSchema: z.object({
+        projectId,
+        shape: z.enum(['rectangle', 'ellipse']).optional().describe('Default rectangle'),
+        start: TimeSchema,
+        duration: DurationSchema.optional().describe('Seconds (default 3)'),
+        width: z.number().positive().max(16384).optional().describe('Pixels (default 400)'),
+        height: z.number().positive().max(16384).optional().describe('Pixels (default 200)'),
+        fill: ColorSchema.nullable()
+          .optional()
+          .describe('Fill color, null for none (default #ffffff)'),
+        strokeColor: ColorSchema.optional(),
+        strokeWidth: z
+          .number()
+          .min(0)
+          .max(500)
+          .optional()
+          .describe('Outline width in pixels (default 0)'),
+        cornerRadius: z
+          .number()
+          .min(0)
+          .max(8192)
+          .optional()
+          .describe('Rounded corners for rectangles'),
+        transform: TransformPatchSchema.optional(),
+        trackId: IdSchema.optional(),
+        mode: placement,
+      }),
+    },
+    guard(async (args) => {
+      const { id, result } = await edit(args.projectId, [
+        { type: 'add_shape', ...args, projectId: undefined },
+      ]);
+      return ok(result.summary, {
+        ...editPayload(id, result),
+        clipId: result.createdIds.find((c) => c.startsWith('clip')),
+      });
+    }),
+  );
+
+  server.registerTool(
     'add_captions',
     {
       title: 'Add captions',

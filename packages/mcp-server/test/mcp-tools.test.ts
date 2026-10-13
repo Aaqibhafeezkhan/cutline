@@ -59,6 +59,7 @@ describe('tool catalogue', () => {
         'add_asset',
         'add_captions',
         'add_clip',
+        'add_shape',
         'add_text_overlay',
         'add_transition',
         'apply_operations',
@@ -116,6 +117,19 @@ describe('editing via MCP', () => {
     await okCall('add_transition', { clipId: split.newClipId, type: 'none' });
     const del = await okCall('delete_clip', { clipIds: [split.newClipId] });
     expect(del.removedIds).toEqual([split.newClipId]);
+
+    const shape = await okCall('add_shape', {
+      shape: 'ellipse',
+      start: 0,
+      width: 120,
+      height: 120,
+      fill: null,
+      strokeWidth: 8,
+    });
+    expect(shape.clipId).toMatch(/^clip_/);
+    expect(String(shape.summary)).toMatch(/Added ellipse 120×120/);
+    const bad = await call('add_shape', { start: 0, width: -5 });
+    expect(bad.isError).toBe(true);
 
     const undone = await okCall('undo');
     expect(undone.summary).toMatch(/^Undid/);

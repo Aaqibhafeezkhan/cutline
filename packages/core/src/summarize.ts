@@ -13,6 +13,7 @@ export interface ClipSummary {
   asset?: string;
   source?: [number, number];
   text?: string;
+  shape?: string;
   volume?: number;
   muted?: boolean;
   transitionIn?: string;
@@ -34,6 +35,10 @@ function summarizeClip(clip: Clip, assetNames: Map<string, string>): ClipSummary
     if (clip.muted) s.muted = true;
   }
   if (clip.type === 'text' || clip.type === 'caption') s.text = clip.text;
+  if (clip.type === 'shape') {
+    const stroke = clip.strokeWidth ? ` stroke ${clip.strokeWidth}px ${clip.strokeColor}` : '';
+    s.shape = `${clip.shape} ${clip.width}x${clip.height} fill ${clip.fill ?? 'none'}${stroke}`;
+  }
   if (clip.type !== 'audio' && clip.type !== 'caption') {
     if (clip.transitionIn)
       s.transitionIn = `${clip.transitionIn.type} ${clip.transitionIn.duration}s`;

@@ -23,6 +23,7 @@
   --color-media-audio: oklch(0.5 0.11 160);
   --color-media-text: oklch(0.6 0.13 75);
   --color-media-caption: oklch(0.55 0.14 350);
+  --color-media-shape: oklch(0.55 0.12 30);
 }
 
 html,

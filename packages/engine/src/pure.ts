@@ -21,3 +21,4 @@ export {
   type ExportProgress,
   type ExportResult,
 } from './export/plan';
+export { shapeMetrics } from './render/shape';

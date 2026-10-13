@@ -198,6 +198,27 @@ export const TextClipSchema = z.object({
   ...visual,
 });
 
+export const ShapeKindSchema = z.enum(['rectangle', 'ellipse']);
+
+/** A vector shape (rectangle / ellipse), sized in project pixels. */
+export const ShapeClipSchema = z.object({
+  type: z.literal('shape'),
+  ...clipBase,
+  shape: ShapeKindSchema.default('rectangle'),
+  width: z.number().positive().max(16384).default(400).describe('Width in project pixels'),
+  height: z.number().positive().max(16384).default(200).describe('Height in project pixels'),
+  fill: ColorSchema.nullable().default('#ffffff').describe('Fill color, null for no fill'),
+  strokeColor: ColorSchema.default('#000000'),
+  strokeWidth: z.number().min(0).max(500).default(0).describe('Outline width in pixels'),
+  cornerRadius: z
+    .number()
+    .min(0)
+    .max(8192)
+    .default(0)
+    .describe('Rectangle corner radius in pixels'),
+  ...visual,
+});
+
 export const CaptionClipSchema = z.object({
   type: z.literal('caption'),
   ...clipBase,
@@ -211,10 +232,11 @@ export const ClipSchema = z.discriminatedUnion('type', [
   AudioClipSchema,
   ImageClipSchema,
   TextClipSchema,
+  ShapeClipSchema,
   CaptionClipSchema,
 ]);
 
-export const ClipTypeSchema = z.enum(['video', 'audio', 'image', 'text', 'caption']);
+export const ClipTypeSchema = z.enum(['video', 'audio', 'image', 'text', 'shape', 'caption']);
 
 // ---------------------------------------------------------------------------
 // Tracks and project
@@ -268,23 +290,27 @@ export type AudioClip = z.output<typeof AudioClipSchema>;
 export type ImageClip = z.output<typeof ImageClipSchema>;
 export type TextClip = z.output<typeof TextClipSchema>;
 export type CaptionClip = z.output<typeof CaptionClipSchema>;
+export type ShapeKind = z.output<typeof ShapeKindSchema>;
+export type ShapeClip = z.output<typeof ShapeClipSchema>;
 export type Clip = z.output<typeof ClipSchema>;
 export type ClipType = z.output<typeof ClipTypeSchema>;
 export type MediaClip = VideoClip | AudioClip | ImageClip;
-export type VisualClip = VideoClip | ImageClip | TextClip;
+export type VisualClip = VideoClip | ImageClip | TextClip | ShapeClip;
 export type TrackKind = z.output<typeof TrackKindSchema>;
 export type Track = z.output<typeof TrackSchema>;
 export type Project = z.output<typeof ProjectSchema>;
 
 /** Which clip types each track kind accepts. */
 export const TRACK_ACCEPTS: Record<TrackKind, readonly ClipType[]> = {
-  video: ['video', 'image', 'text'],
+  video: ['video', 'image', 'text', 'shape'],
   audio: ['audio'],
   caption: ['caption'],
 };
 
 export function isVisualClip(clip: Clip): clip is VisualClip {
-  return clip.type === 'video' || clip.type === 'image' || clip.type === 'text';
+  return (
+    clip.type === 'video' || clip.type === 'image' || clip.type === 'text' || clip.type === 'shape'
+  );
 }
 
 export function isAudibleClip(clip: Clip): clip is VideoClip | AudioClip {

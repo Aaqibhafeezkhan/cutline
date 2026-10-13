@@ -19,6 +19,7 @@ import type {
 } from '@cutline/core';
 import { captionTokens, layoutWords } from './caption-layout';
 import { colorMatrix, hasColorEffects } from './color';
+import { shapeMetrics } from './shape';
 import { captionCenterY, parseColor, placeMedia, placeText } from './layout';
 
 /** Decoded pixels for the visual layers of one frame. */
@@ -139,6 +140,9 @@ export class Compositor {
       case 'text':
         this.updateText(node, layer);
         return true;
+      case 'shape':
+        this.updateShape(node, layer);
+        return true;
       case 'caption':
         this.updateCaption(node, layer);
         return true;
@@ -222,6 +226,41 @@ export class Compositor {
           ? { color: parseColor(style.strokeColor).color, width: style.strokeWidth * s }
           : undefined,
     });
+  }
+
+  private updateShape(node: Node, layer: VisualLayer) {
+    const shape = layer.shape!;
+    const s = this.renderScale;
+    const key = JSON.stringify([shape, s]);
+    if (node.key !== key) {
+      node.container.removeChildren().forEach((c) => c.destroy());
+      const g = new Graphics();
+      const { w, h, r, stroke } = shapeMetrics(shape, s);
+      if (shape.kind === 'ellipse') g.ellipse(0, 0, w / 2, h / 2);
+      else if (r > 0) g.roundRect(-w / 2, -h / 2, w, h, r);
+      else g.rect(-w / 2, -h / 2, w, h);
+      if (shape.fill) {
+        const fill = parseColor(shape.fill);
+        g.fill({ color: fill.color, alpha: fill.alpha });
+      }
+      if (stroke > 0) {
+        const c = parseColor(shape.strokeColor);
+        // alignment 1 = stroke inside the shape, so its size stays width × height.
+        g.stroke({ width: stroke, color: c.color, alpha: c.alpha, alignment: 1 });
+      }
+      node.container.addChild(g);
+      node.key = key;
+    }
+    const place = placeText(
+      { width: this.projectWidth, height: this.projectHeight },
+      layer.transform,
+      s,
+    );
+    node.container.position.set(place.centerX, place.centerY);
+    node.container.scale.set(place.scale);
+    node.container.rotation = place.rotation;
+    node.container.alpha = place.alpha;
+    this.applyEffects(node, node.container, layer);
   }
 
   private updateText(node: Node, layer: VisualLayer) {
