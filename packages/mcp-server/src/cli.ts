@@ -1,7 +1,9 @@
 import { parseArgs } from 'node:util';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
-import { loadDotEnv } from './config';
+import { existsSync } from 'node:fs';
+import { join, resolve } from 'node:path';
+import { loadDotEnv, workspaceRoot } from './config';
 import { log } from './log';
 import { createMcpServer } from './mcp/server';
 import { startServer } from './server';
@@ -18,8 +20,25 @@ Options:
   --port <n>        HTTP port (default 4100, env CUTLINE_PORT)
   --host <host>     Bind address (default 127.0.0.1, env CUTLINE_HOST)
   --data-dir <dir>  Where projects and media are stored (env CUTLINE_DATA_DIR)
+  --serve-web       Also serve the built editor UI (apps/web/dist or CUTLINE_WEB_DIST)
   -h, --help        Show this help
 `;
+
+/** --serve-web: serve the built editor from this server (apps/web/dist unless CUTLINE_WEB_DIST is set). */
+function serveWeb(): void {
+  const dist =
+    process.env.CUTLINE_WEB_DIST ??
+    [workspaceRoot(), resolve(import.meta.dirname, '../../../apps/web/dist')]
+      .filter((p): p is string => Boolean(p))
+      .map((p) => (p.endsWith('dist') ? p : join(p, 'apps/web/dist')))
+      .find((p) => existsSync(join(p, 'index.html')));
+  if (!dist) {
+    log.warn('--serve-web: no built editor found. Run `pnpm build` first or set CUTLINE_WEB_DIST.');
+    return;
+  }
+  process.env.CUTLINE_WEB_DIST = dist;
+  process.env.CUTLINE_PUBLIC_URL ??= `http://localhost:${process.env.CUTLINE_PORT ?? 4100}`;
+}
 
 async function findRunningServer(base: string, token: string | undefined): Promise<boolean> {
   try {
@@ -61,6 +80,7 @@ async function main(): Promise<void> {
       port: { type: 'string' },
       host: { type: 'string' },
       'data-dir': { type: 'string' },
+      'serve-web': { type: 'boolean', default: false },
       help: { type: 'boolean', short: 'h', default: false },
     },
   });
@@ -72,6 +92,7 @@ async function main(): Promise<void> {
   if (values.port) process.env.CUTLINE_PORT = values.port;
   if (values.host) process.env.CUTLINE_HOST = values.host;
   if (values['data-dir']) process.env.CUTLINE_DATA_DIR = values['data-dir'];
+  if (values['serve-web']) serveWeb();
 
   const port = Number(process.env.CUTLINE_PORT ?? 4100);
   const host = process.env.CUTLINE_HOST ?? '127.0.0.1';

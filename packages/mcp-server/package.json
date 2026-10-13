@@ -1,6 +1,6 @@
 {
   "name": "@cutline/mcp-server",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
   "description": "Cutline MCP server: editing + perception tools for AI agents, WebSocket sync for the browser editor.",
   "license": "MIT",
@@ -13,7 +13,7 @@
   },
   "scripts": {
     "dev": "node --watch-path=src --watch-path=../core/src --import tsx src/cli.ts",
-    "start": "node dist/cli.js",
+    "start": "node dist/cli.js --serve-web",
     "build": "tsup",
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run",

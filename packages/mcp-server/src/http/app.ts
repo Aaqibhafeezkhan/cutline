@@ -340,7 +340,8 @@ export function createApp(services: Services): AppHandle {
   const dist = config.webDistDir ? resolve(config.webDistDir) : null;
   if (dist && existsSync(join(dist, 'index.html'))) {
     app.use(express.static(dist, { index: false, maxAge: '1h' }));
-    app.get(/^(?!\/(api|mcp|ws)(\/|$)).*/, (_req, res) => {
+    // SPA fallback for client routes (not for API paths or missing files like /assets/x.js).
+    app.get(/^(?!\/(api|mcp|ws)(\/|$))(?!.*\.\w+$).*/, (_req, res) => {
       res.sendFile(join(dist, 'index.html'));
     });
   } else {

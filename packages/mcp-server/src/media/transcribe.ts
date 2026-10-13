@@ -37,7 +37,10 @@ export class WhisperTranscriber implements Transcriber {
 
   private load(): Promise<AsrPipeline> {
     this.pipe ??= (async () => {
-      let mod: { pipeline: (task: string, model: string, opts: object) => Promise<unknown> };
+      let mod: {
+        pipeline: (task: string, model: string, opts: object) => Promise<unknown>;
+        env: { cacheDir: string };
+      };
       try {
         mod = (await import('@huggingface/transformers')) as never;
       } catch {
@@ -46,6 +49,8 @@ export class WhisperTranscriber implements Transcriber {
           hint: 'Install the optional dependency: pnpm --filter @cutline/mcp-server add @huggingface/transformers',
         });
       }
+      // Keep downloaded models somewhere persistent (e.g. the Docker data volume).
+      if (process.env.CUTLINE_MODEL_DIR) mod.env.cacheDir = process.env.CUTLINE_MODEL_DIR;
       log.info(`loading speech model ${this.model} (first run downloads it)…`);
       return (await mod.pipeline('automatic-speech-recognition', this.model, {
         dtype: 'q8',
