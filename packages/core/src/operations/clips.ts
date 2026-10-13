@@ -15,6 +15,8 @@ import {
   TrackSchema,
   clipEnd,
   hasSource,
+  isVisualClip,
+  type Animation,
   type Clip,
   type Project,
   type Track,
@@ -23,7 +25,7 @@ import {
 import { EPSILON, formatRange, formatTime, roundTime } from '../time';
 import { mergeRanges } from '../ranges';
 import { outcome, type OpOutcome } from './outcome';
-import { applyPropsPatch, assertTransitionFits } from './props';
+import { applyAnimations, applyPropsPatch, assertTransitionFits } from './props';
 import type { OpOf } from './schemas';
 import {
   assertAccepts,
@@ -277,6 +279,27 @@ export function setTransition(draft: Project, op: OpOf<'set_transition'>): OpOut
     `Added a ${formatTime(op.transition.duration)} ${op.transition.type} into clip ${clip.id}.`,
     { modified: [clip.id] },
   );
+}
+
+export function setAnimation(draft: Project, op: OpOf<'set_animation'>): OpOutcome {
+  const { track, clip } = findClip(draft, op.clipId);
+  assertEditable(track);
+  if (!isVisualClip(clip)) {
+    throw new CutlineError(
+      'INVALID_ARGUMENT',
+      `Animations only apply to visual clips (video, image, text, shape), not ${clip.type}.`,
+      { hint: 'Pick a clip on a video track; for audio use fadeIn/fadeOut via set_audio_volume.' },
+    );
+  }
+  applyAnimations(clip, op.in, op.out);
+  const describe = (edge: string, a: Animation | null | undefined) =>
+    a === undefined
+      ? undefined
+      : a === null
+        ? `removed the ${edge} animation`
+        : `${edge} ${a.preset} ${formatTime(a.duration)}`;
+  const parts = [describe('in', op.in), describe('out', op.out)].filter(Boolean);
+  return outcome(`Clip ${clip.id}: ${parts.join(', ')}.`, { modified: [clip.id] });
 }
 
 export function setVolume(draft: Project, op: OpOf<'set_volume'>): OpOutcome {

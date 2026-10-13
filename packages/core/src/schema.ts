@@ -98,6 +98,25 @@ export const TransitionSchema = z.object({
   duration: z.number().positive().max(10),
 });
 
+/**
+ * Entrance/exit animation presets. Their motion is computed at render time
+ * (see `animation.ts`), so trims and splits never leave stale keyframes.
+ */
+export const ANIMATION_PRESETS = [
+  'fade',
+  'slide-left',
+  'slide-right',
+  'slide-up',
+  'slide-down',
+  'zoom',
+  'pop',
+] as const;
+export const AnimationPresetSchema = z.enum(ANIMATION_PRESETS);
+export const AnimationSchema = z.object({
+  preset: AnimationPresetSchema,
+  duration: z.number().positive().max(10).default(0.5).describe('Seconds (default 0.5)'),
+});
+
 export const TextStyleSchema = z.object({
   fontFamily: z.string().min(1).max(200).default('sans-serif'),
   fontSize: z.number().positive().max(1000).default(72).describe('Pixels at output resolution'),
@@ -152,6 +171,12 @@ const visual = {
   keyframes: KeyframesSchema.optional(),
   transitionIn: TransitionSchema.optional().describe(
     'Transition from the previous adjacent clip on the same track (or from transparent)',
+  ),
+  animationIn: AnimationSchema.optional().describe(
+    'Entrance animation preset over the first `duration` seconds of the clip',
+  ),
+  animationOut: AnimationSchema.optional().describe(
+    'Exit animation preset over the last `duration` seconds of the clip',
   ),
   ...fades,
 };
@@ -282,6 +307,8 @@ export type Keyframes = z.output<typeof KeyframesSchema>;
 export type Effects = z.output<typeof EffectsSchema>;
 export type Transition = z.output<typeof TransitionSchema>;
 export type TransitionType = z.output<typeof TransitionTypeSchema>;
+export type AnimationPreset = z.output<typeof AnimationPresetSchema>;
+export type Animation = z.output<typeof AnimationSchema>;
 export type TextStyle = z.output<typeof TextStyleSchema>;
 export type CaptionStyle = z.output<typeof CaptionStyleSchema>;
 export type Word = z.output<typeof WordSchema>;

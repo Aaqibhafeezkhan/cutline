@@ -36,6 +36,7 @@ const GROUPS: Record<string, string[]> = {
     'delete_clip',
     'delete_range',
     'set_clip_property',
+    'animate_clip',
     'add_text_overlay',
     'add_shape',
     'add_captions',

@@ -1,16 +1,20 @@
 import {
   CaptionStyleSchema,
+  animationAt,
+  animationSampleTimes,
   clipEnd,
   previousAdjacent,
   resolveAudioSegments,
+  type AnimationContribution,
   type Asset,
+  type FrameSize,
   type CaptionClip,
   type Project,
   type TextClip,
   type Track,
   type VisualClip,
 } from '@cutline/core';
-import { keyframePoints, multiply, num, piecewise, type Point } from './expr';
+import { add, isConstant, keyframePoints, multiply, num, piecewise, type Point } from './expr';
 import { shapeSource } from './shape';
 
 export interface GraphOptions {
@@ -102,13 +106,70 @@ function fadePoints(track: Track, clip: VisualClip, shift: number): Point[] {
   return pts;
 }
 
-function opacityPoints(track: Track, clip: VisualClip, shift: number): Point[] {
-  const kf = clip.keyframes?.opacity;
-  const base: Point[] =
-    kf && kf.length > 0
-      ? keyframePoints(kf, clip.start - shift)
-      : [{ t: 0, v: clip.transform.opacity }];
-  return multiply(base, fadePoints(track, clip, shift));
+/** Keyframed (or static) transform property in output time; `shift` = clip start in output time. */
+function propertyPoints(
+  clip: VisualClip,
+  prop: 'x' | 'y' | 'scale' | 'opacity',
+  shift: number,
+): Point[] {
+  const kf = clip.keyframes?.[prop];
+  return kf?.length ? keyframePoints(kf, shift) : [{ t: 0, v: clip.transform[prop] }];
+}
+
+/**
+ * One channel of the clip's entrance/exit animation preset in output time,
+ * sampled from the core helper (the same function the resolver uses). Empty
+ * if the clip has no animation.
+ */
+function presetPoints(
+  clip: VisualClip,
+  shift: number,
+  frame: FrameSize,
+  pick: (a: AnimationContribution) => number,
+): Point[] {
+  return animationSampleTimes(clip).map((lt) => ({
+    t: lt + shift,
+    v: pick(animationAt(clip, lt, frame)),
+  }));
+}
+
+/** Opacity: keyframes × animation preset × fades/transitions. */
+function opacityPoints(track: Track, clip: VisualClip, start: number, frame: FrameSize): Point[] {
+  const shift = clip.start - start;
+  const base = multiply(
+    propertyPoints(clip, 'opacity', shift),
+    presetPoints(clip, shift, frame, (a) => a.opacity),
+  );
+  return multiply(base, fadePoints(track, clip, start));
+}
+
+/** Scale: keyframes × animation preset. */
+function scalePoints(clip: VisualClip, shift: number, frame: FrameSize): Point[] {
+  return multiply(
+    propertyPoints(clip, 'scale', shift),
+    presetPoints(clip, shift, frame, (a) => a.scale),
+  );
+}
+
+/**
+ * Layer center along one axis in output pixels: `half` + `s` × (keyframed
+ * position + animation offset), as a constant or a per-frame expression.
+ */
+function centerExpr(
+  clip: VisualClip,
+  axis: 'x' | 'y',
+  shift: number,
+  frame: FrameSize,
+  half: number,
+  s: number,
+): string {
+  const pts = add(
+    propertyPoints(clip, axis, shift),
+    presetPoints(clip, shift, frame, (a) => (axis === 'x' ? a.dx : a.dy)),
+  );
+  return isConstant(pts)
+    ? num(half + pts[0]!.v * s)
+    : `(${num(half)}+${num(s)}*(${piecewise(pts)}))`;
 }
 
 /** Greedy wrap by estimated glyph width (drawtext does not wrap). */
@@ -225,6 +286,7 @@ export function buildRenderGraph(
           sy,
           opts,
           warnings,
+          project.settings,
         );
         continue;
       }
@@ -274,16 +336,16 @@ export function buildRenderGraph(
         bw = mw * fit * sx;
         bh = mh * fit * sy;
       }
-      // Keyframed scale → per-frame expression.
-      const scaleKf = clip.keyframes?.scale;
+      // Keyframed or preset-animated scale → per-frame expression.
       const shift = clip.start - start;
+      const scale = scalePoints(clip, shift, project.settings);
       // Timestamps become output time before any time-dependent filter.
       filters.push(`setpts=PTS+${num(from - start)}/TB`);
-      if (scaleKf?.length) {
-        const s = piecewise(keyframePoints(scaleKf, shift));
+      if (!isConstant(scale)) {
+        const s = piecewise(scale);
         filters.push(`scale=w='max(2,${num(bw)}*(${s}))':h='max(2,${num(bh)}*(${s}))':eval=frame`);
       } else {
-        const s = clip.transform.scale;
+        const s = scale[0]!.v;
         filters.push(`scale=${Math.max(2, Math.round(bw * s))}:${Math.max(2, Math.round(bh * s))}`);
       }
       filters.push('format=rgba');
@@ -302,9 +364,8 @@ export function buildRenderGraph(
         const a = num((clip.transform.rotation * Math.PI) / 180);
         filters.push(`rotate=a=${a}:c=none:ow='rotw(${a})':oh='roth(${a})'`);
       }
-      const opacity = opacityPoints(track, clip, start);
-      const constant = opacity.length === 1 || opacity.every((p) => p.v === opacity[0]!.v);
-      if (constant) {
+      const opacity = opacityPoints(track, clip, start, project.settings);
+      if (isConstant(opacity)) {
         const o = opacity[0]?.v ?? 1;
         if (o < 1) filters.push(`colorchannelmixer=aa=${num(o)}`);
       } else {
@@ -314,14 +375,8 @@ export function buildRenderGraph(
       }
       chains.push(`${filters.join(',')}[${label}]`);
 
-      const kx = clip.keyframes?.x;
-      const ky = clip.keyframes?.y;
-      const cx = kx?.length
-        ? `(${num(W / 2)}+${num(sx)}*(${piecewise(keyframePoints(kx, shift))}))`
-        : num(W / 2 + clip.transform.x * sx);
-      const cy = ky?.length
-        ? `(${num(H / 2)}+${num(sy)}*(${piecewise(keyframePoints(ky, shift))}))`
-        : num(H / 2 + clip.transform.y * sy);
+      const cx = centerExpr(clip, 'x', shift, project.settings, W / 2, sx);
+      const cy = centerExpr(clip, 'y', shift, project.settings, H / 2, sy);
       const out = nextBase();
       chains.push(
         `[${base}][${label}]overlay=x='${cx}-w/2':y='${cy}-h/2':eof_action=pass:eval=frame:format=auto[${out}]`,
@@ -387,11 +442,17 @@ function drawText(
   sy: number,
   opts: GraphOptions,
   warnings: Set<string>,
+  frame: FrameSize,
 ): string {
   const st = clip.style;
-  const scale = clip.transform.scale;
-  const size = st.fontSize * sx * scale;
+  const shift = clip.start - opts.start;
+  // Lines wrap at the static size; keyframes and animation presets scale the glyphs.
+  const size = st.fontSize * sx * clip.transform.scale;
   const text = wrapText(clip.text, size, st.maxWidth * W, st.bold);
+  const scale = scalePoints(clip, shift, frame);
+  const fontSize = isConstant(scale)
+    ? num(st.fontSize * sx * scale[0]!.v)
+    : `'max(1,${num(st.fontSize * sx)}*(${piecewise(scale)}))'`;
   if (clip.transform.rotation || clip.keyframes?.rotation?.length)
     warnings.add('text rotation is preview-only');
   if (
@@ -402,20 +463,13 @@ function drawText(
   ) {
     warnings.add('effects on text are preview-only');
   }
-  const shift = clip.start - opts.start;
-  const kx = clip.keyframes?.x;
-  const ky = clip.keyframes?.y;
-  const cx = kx?.length
-    ? `(${num(W / 2)}+${num(sx)}*(${piecewise(keyframePoints(kx, shift))}))`
-    : num(W / 2 + clip.transform.x * sx);
-  const cy = ky?.length
-    ? `(${num(H / 2)}+${num(sy)}*(${piecewise(keyframePoints(ky, shift))}))`
-    : num(H / 2 + clip.transform.y * sy);
-  const alpha = piecewise(opacityPoints(track, clip, opts.start));
+  const cx = centerExpr(clip, 'x', shift, frame, W / 2, sx);
+  const cy = centerExpr(clip, 'y', shift, frame, H / 2, sy);
+  const alpha = piecewise(opacityPoints(track, clip, opts.start, frame));
   const parts = [
     `textfile=${filterPath(opts.textFile(text))}`,
     fontOption(st.fontFamily, st.bold, st.italic, opts.fontFile),
-    `fontsize=${num(size)}`,
+    `fontsize=${fontSize}`,
     `fontcolor=${ffColor(st.color)}`,
     `text_align=${st.align === 'left' ? 'L' : st.align === 'right' ? 'R' : 'C'}`,
     `x='${cx}-text_w/2'`,

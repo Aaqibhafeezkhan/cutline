@@ -1,8 +1,10 @@
+import { assertAnimationsFit } from '../animation';
 import { CutlineError } from '../errors';
 import { sortKeyframes } from '../keyframes';
 import { previousAdjacent } from '../queries';
 import {
   type AnimatableProperty,
+  type Animation,
   type Clip,
   type ClipType,
   type Effects,
@@ -45,6 +47,8 @@ const APPLIES: Record<keyof ClipPropsPatch, readonly ClipType[]> = {
   style: ['text'],
   words: ['caption'],
   transitionIn: VISUAL,
+  animationIn: VISUAL,
+  animationOut: VISUAL,
   shape: SHAPE,
   width: SHAPE,
   height: SHAPE,
@@ -107,6 +111,27 @@ interface LooseClip {
   style?: TextStyle;
   words?: Word[];
   transitionIn?: Transition;
+  animationIn?: Animation;
+  animationOut?: Animation;
+}
+
+/**
+ * Sets (Animation), removes (null) or keeps (undefined) the entrance and exit
+ * animations of a visual clip draft, after checking that they fit together.
+ */
+export function applyAnimations(
+  clip: Clip,
+  animationIn: Animation | null | undefined,
+  animationOut: Animation | null | undefined,
+): void {
+  const c = clip as unknown as LooseClip & { duration: number };
+  const nextIn = animationIn === undefined ? c.animationIn : (animationIn ?? undefined);
+  const nextOut = animationOut === undefined ? c.animationOut : (animationOut ?? undefined);
+  assertAnimationsFit(c, nextIn, nextOut);
+  if (nextIn) c.animationIn = nextIn;
+  else delete c.animationIn;
+  if (nextOut) c.animationOut = nextOut;
+  else delete c.animationOut;
 }
 
 /** Applies a props patch to a clip draft in place, validating applicability. */
@@ -156,6 +181,9 @@ export function applyPropsPatch(track: Track, clip: Clip, patch: ClipPropsPatch)
       assertTransitionFits(track, clip, patch.transitionIn.duration);
       c.transitionIn = patch.transitionIn;
     }
+  }
+  if (patch.animationIn !== undefined || patch.animationOut !== undefined) {
+    applyAnimations(clip, patch.animationIn, patch.animationOut);
   }
   return changed;
 }

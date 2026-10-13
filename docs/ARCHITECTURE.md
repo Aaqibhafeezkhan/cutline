@@ -59,8 +59,10 @@ This keeps one build step per app and avoids stale `dist/` folders.
 - Clip kinds: `video`, `audio`, `image`, `text`, `caption`.
 - Visual clips have a `transform` (x, y, scale, rotation, opacity), optional
   `keyframes` per animatable property, `effects` (brightness, contrast,
-  saturation, blur), `fadeIn`/`fadeOut` and an optional `transitionIn`
-  (`crossfade` or `dipToBlack`, centered on the cut).
+  saturation, blur), `fadeIn`/`fadeOut`, an optional `transitionIn`
+  (`crossfade` or `dipToBlack`, centered on the cut) and optional
+  `animationIn`/`animationOut` presets (fade, slides, zoom, pop) that the
+  resolver evaluates at render time, so they follow trims and splits.
 - `schemaVersion` + an ordered migration list lets old documents load.
 
 ### 2. Operations, patches, history
