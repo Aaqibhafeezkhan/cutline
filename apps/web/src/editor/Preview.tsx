@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pause, Play, SkipBack, SkipForward } from 'lucide-react';
 import { projectDuration } from '@cutline/core';
 import { Player } from '@cutline/engine';
@@ -7,11 +7,15 @@ import { assetUrl, getToken } from '@/lib/api';
 import { seek, setPlayer, togglePlay } from '@/lib/player-bridge';
 import { useEditor, usePlayhead } from '@/lib/store';
 import { formatTimecode } from '@/lib/utils';
+import { CanvasOverlay, type DraftFn } from './canvas/CanvasOverlay';
 
 /** WebGL preview of the live document (the engine re-renders on every change). */
 export function Preview() {
   const host = useRef<HTMLDivElement>(null);
   const playerRef = useRef<Player | null>(null);
+  const [player, setPlayerState] = useState<Player | null>(null);
+  // While dragging on the canvas the preview shows a local draft of the document.
+  const draftRef = useRef<DraftFn | null>(null);
   const project = useEditor((s) => s.project);
   const projectId = useEditor((s) => s.projectId);
   const [error, setError] = useState<string | null>(null);
@@ -45,6 +49,7 @@ export function Preview() {
         if (disposed) return player.destroy();
         playerRef.current = player;
         setPlayer(player);
+        setPlayerState(player);
         const current = useEditor.getState().project;
         if (current) {
           player.setProject(current);
@@ -57,6 +62,7 @@ export function Preview() {
     return () => {
       disposed = true;
       setPlayer(null);
+      setPlayerState(null);
       playerRef.current?.destroy();
       playerRef.current = null;
       canvas.remove();
@@ -64,8 +70,15 @@ export function Preview() {
   }, [projectId]);
 
   useEffect(() => {
-    if (project) playerRef.current?.setProject(project);
+    const draft = draftRef.current;
+    if (project) playerRef.current?.setProject(draft ? draft(project) : project);
   }, [project]);
+
+  const setDraft = useCallback((draft: DraftFn | null, render = true) => {
+    draftRef.current = draft;
+    const current = useEditor.getState().project;
+    if (render && current) playerRef.current?.setProject(draft ? draft(current) : current);
+  }, []);
 
   const duration = project ? projectDuration(project) : 0;
 
@@ -74,6 +87,7 @@ export function Preview() {
       <div className="min-h-0 flex-1 p-3">
         <div className="relative h-full w-full">
           <div ref={host} className="h-full w-full" />
+          <CanvasOverlay player={player} setDraft={setDraft} />
           {error && (
             <div
               role="alert"
