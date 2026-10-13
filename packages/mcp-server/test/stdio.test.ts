@@ -37,7 +37,7 @@ describe('stdio transport', () => {
     const port = randomPort();
     const client = await stdioClient(port, await tempDir());
     const { tools } = await client.listTools();
-    expect(tools.length).toBe(27);
+    expect(tools.length).toBe(29);
     const r = (await client.callTool({
       name: 'create_project',
       arguments: { name: 'Via stdio' },

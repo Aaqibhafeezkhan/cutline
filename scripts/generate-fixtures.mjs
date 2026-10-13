@@ -83,6 +83,16 @@ const fixtures = {
     '-c:a',
     'pcm_s16le',
   ],
+  // 8 s click track at 120 BPM: a decaying 1 kHz click every 0.5 s starting at 0.25 s.
+  // Used by beat detection tests.
+  'clicks-120bpm-8s.wav': [
+    '-f',
+    'lavfi',
+    '-i',
+    "aevalsrc='0.8*sin(2*PI*1000*t)*exp(-mod(t+0.25\\,0.5)/0.006)':s=44100:d=8",
+    '-c:a',
+    'pcm_s16le',
+  ],
   // Still image.
   'still.png': ['-f', 'lavfi', '-i', 'testsrc2=size=640x360:rate=1:duration=1', '-frames:v', '1'],
 };

@@ -79,6 +79,15 @@ export interface ExportJob {
   error?: string;
 }
 
+/** Tempo and beat times of an asset, in source seconds. */
+export interface BeatInfo {
+  bpm: number;
+  confidence: number;
+  beats: number[];
+  downbeats?: number[];
+  duration: number;
+}
+
 export const api = {
   health: () => request<Health>('/api/health'),
   listProjects: () => request<{ projects: ProjectListItem[] }>('/api/projects'),
@@ -125,6 +134,13 @@ export const api = {
     request<{ exports: Array<{ fileName: string; url: string; sizeBytes: number }> }>(
       `/api/projects/${projectId}/exports`,
     ),
+  /** Beat grid computed earlier (null if never analysed). */
+  getBeats: (projectId: string, assetId: string) =>
+    request<{ beats: BeatInfo | null }>(`/api/projects/${projectId}/assets/${assetId}/beats`),
+  detectBeats: (projectId: string, assetId: string) =>
+    request<{ beats: BeatInfo }>(`/api/projects/${projectId}/assets/${assetId}/beats`, {
+      method: 'POST',
+    }),
   autoCaptions: (projectId: string, language?: string) =>
     request<{ summary: string; cueCount: number }>(`/api/projects/${projectId}/captions/auto`, {
       method: 'POST',

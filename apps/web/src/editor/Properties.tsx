@@ -11,6 +11,7 @@ import { Textarea } from '@/components/ui/input';
 import { Select, Switch } from '@/components/ui/misc';
 import { useEditor } from '@/lib/store';
 import { AnimationSection } from './AnimationSection';
+import { BeatsSection } from './BeatsSection';
 import { ColorField, Field, NumberField, Section, SliderField } from './fields';
 
 /** Generic families: the server renderer maps them to matching font files. */
@@ -110,6 +111,7 @@ export function Properties() {
           </Field>
         </Section>
       )}
+      {(clip.type === 'video' || clip.type === 'audio') && <BeatsSection clip={clip} />}
       {clip.type !== 'caption' && (
         <Section title="Fades">
           <NumberField

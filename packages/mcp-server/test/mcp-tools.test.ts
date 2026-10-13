@@ -66,8 +66,10 @@ describe('tool catalogue', () => {
         'animate_clip',
         'apply_operations',
         'create_project',
+        'cut_to_beats',
         'delete_clip',
         'delete_range',
+        'detect_beats',
         'detect_scenes',
         'detect_silence',
         'export_video',
@@ -190,6 +192,10 @@ describe('editing via MCP', () => {
     const bad = await call('set_audio_volume', { volume: 1 });
     expect(bad.isError).toBe(true);
     expect(JSON.stringify(bad.content)).toMatch(/exactly one of clipId or trackId/);
+    const noMusic = await call('detect_beats');
+    expect(JSON.stringify(noMusic.content)).toMatch(/no clip on an audio track.*Hint: Pass clipId/);
+    const narrow = await call('cut_to_beats', { minBpm: 100, maxBpm: 120 });
+    expect(JSON.stringify(narrow.content)).toMatch(/too narrow/);
   });
 });
 
@@ -268,5 +274,46 @@ describe.runIf(hasFfmpeg && hasFixtures)('media tools via MCP (ffmpeg)', () => {
       width: 64,
     });
     expect(assetFrames.content.filter((c) => c.type === 'image')).toHaveLength(2);
+  }, 60_000);
+
+  it('detects beats and cuts footage to them in one undo step', async () => {
+    const beatProject = String((await okCall('create_project', { name: 'Beats' })).projectId);
+    const add = async (name: string) =>
+      ((await okCall('add_asset', { path: fixture(name) })).asset as { id: string }).id;
+    const music = await okCall('add_clip', {
+      assetId: await add('clicks-120bpm-8s.wav'),
+      start: 0,
+    });
+    const footage: string[] = [];
+    for (const name of ['testsrc-5s.mp4', 'scenes-6s.mp4', 'still.png']) {
+      footage.push(String((await okCall('add_clip', { assetId: await add(name) })).clipId));
+    }
+
+    const beats = await call('detect_beats', { clipId: music.clipId });
+    const data = beats.structuredContent!;
+    expect(Math.abs(Number(data.bpm) - 120)).toBeLessThanOrEqual(1);
+    const timeline = data.timelineBeats as number[];
+    expect(timeline.length).toBeGreaterThanOrEqual(14);
+    expect(timeline[0]).toBeCloseTo(0.25, 1);
+    expect((beats.content[0] as { text: string }).text).toMatch(/1(19|20)(\.\d+)? BPM.*4 more/s);
+    const assetBeats = await okCall('detect_beats', {
+      assetId: (await services.docs.get(beatProject)).project.assets[0]!.id,
+    });
+    expect(assetBeats.timelineBeats).toBeUndefined();
+
+    const cut = await okCall('cut_to_beats', { musicClipId: music.clipId, everyNBeats: 2 });
+    const cuts = cut.cuts as Array<{ clipId: string; start: number; end: number }>;
+    expect(cuts.map((c) => c.clipId)).toEqual(footage);
+    for (const c of cuts) {
+      expect(timeline.some((b) => Math.abs(b - c.end) < 0.001)).toBe(true);
+    }
+    const { project, history } = await services.docs.get(beatProject);
+    const placed = project.tracks.flatMap((t) => t.clips).filter((c) => footage.includes(c.id));
+    expect(placed.map((c) => c.start)).toEqual(cuts.map((c) => c.start));
+    expect(history.undoLabel).toMatch(/to the beat/);
+    const last = await okCall('cut_to_beats', { clipIds: [footage[2]], everyNBeats: 8 });
+    expect((last.cuts as Array<{ beats: number }>)[0]!.beats).toBe(8);
+    const blocked = await call('cut_to_beats', { clipIds: [footage[0]], everyNBeats: 8 });
+    expect(JSON.stringify(blocked.content)).toMatch(/OVERLAP.*Hint/);
   }, 60_000);
 });

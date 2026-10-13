@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Beat detection and cutting on the beat**: a pure-TypeScript beat tracker (spectral-flux onset
+  envelope, autocorrelation tempo estimate with an 80–160 BPM preference, dynamic-programming beat
+  grid, downbeats when clear) with results cached per asset. New MCP tools `detect_beats` (BPM,
+  confidence, beat and downbeat times in asset and timeline seconds) and `cut_to_beats` (lays the
+  main video track's clips, or the given clips, back-to-back so every cut lands on every Nth beat,
+  as one undo step built from `move_clip`/`trim_clip`). The editor shows beat ticks on clips whose
+  beats are known, snaps timeline drags to them, and has a "Detect beats" button for audio and
+  video clips (new REST route `GET`/`POST /api/projects/:id/assets/:assetId/beats`). New synthetic
+  fixture `clicks-120bpm-8s.wav`.
+
 ## [0.2.0] - 2026-10-13
 
 Motion graphics: shapes, text templates and animation presets, plus direct manipulation of
