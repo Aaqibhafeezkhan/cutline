@@ -29,6 +29,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `wordRangesToCuts`, `findPhraseInWords` and `groupParagraphs`; the server adds a
   `POST /api/projects/:id/transcript` route that returns cached (or freshly transcribed) per-asset
   words. The MCP server now exposes 34 tools.
+- **Chapters, markers and highlight reels**: projects can hold markers (`chapter`, `note`,
+  `highlight` with an optional end) that follow ripple edits of the whole timeline (`delete_range`,
+  and ripple trims/deletes on the main video track). New core operations `add_markers`,
+  `update_marker`, `remove_markers`, `set_chapters` (validates order and YouTube's rules: first at
+  0, at least 3, each at least 10 s) and `assemble_ranges` (lays timeline ranges back-to-back with
+  everything they show, optional crossfades; labelled ranges become chapters). Five new MCP tools:
+  `get_chapters_input` (transcript sentences grouped into ~20–60 s blocks plus scene cuts,
+  silences and loud moments, so an agent can pick chapters and highlights in one call),
+  `set_chapters`, `export_chapters` (YouTube description text, ffmetadata or JSON),
+  `mark_highlights` and `create_highlight_reel` (new project or appended, optional 9:16/1:1
+  output size). Server-rendered MP4s embed the chapters. The editor draws chapters as labelled
+  flags and highlights as coloured spans on the ruler (click seeks, double-click renames, Del
+  removes, `M` adds a note at the playhead) and has a Chapters panel with "Copy for YouTube".
+  `get_project` lists chapters and markers. The MCP server now exposes 39 tools.
 
 ## [0.3.0] - 2026-10-13
 

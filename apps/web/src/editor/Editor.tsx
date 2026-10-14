@@ -8,7 +8,15 @@ import { isTypingTarget } from '@/lib/utils';
 import { ActivityFeed } from './ActivityFeed';
 import { AssetBin } from './AssetBin';
 import { CaptionsPanel } from './CaptionsPanel';
-import { addText, deleteSelection, nudgeSelection, selectAll, splitAtPlayhead } from './commands';
+import { ChaptersPanel } from './ChaptersPanel';
+import {
+  addMarker,
+  addText,
+  deleteSelection,
+  nudgeSelection,
+  selectAll,
+  splitAtPlayhead,
+} from './commands';
 import { BrandKitDialog } from './BrandKitDialog';
 import { ChatPanel } from './ChatPanel';
 import { ConnectDialog } from './ConnectDialog';
@@ -48,6 +56,7 @@ function useShortcuts(openHelp: () => void, toggleChat: () => void) {
       else if (e.key === ' ') togglePlay();
       else if (key === 's' && !mod) void splitAtPlayhead();
       else if (key === 't' && !mod) void addText();
+      else if (key === 'm' && !mod) void addMarker();
       else if (e.key === 'Delete' || e.key === 'Backspace') void deleteSelection(e.shiftKey);
       else if (e.key === 'ArrowLeft' && e.altKey) void nudgeSelection(-frame);
       else if (e.key === 'ArrowRight' && e.altKey) void nudgeSelection(frame);
@@ -139,6 +148,7 @@ export function Editor({ projectId }: { projectId: string }) {
               <TabsTrigger value="properties">Properties</TabsTrigger>
               <TabsTrigger value="transcript">Transcript</TabsTrigger>
               <TabsTrigger value="captions">Captions</TabsTrigger>
+              <TabsTrigger value="chapters">Chapters</TabsTrigger>
               <TabsTrigger value="activity">Activity</TabsTrigger>
             </TabsList>
             <TabsContent value="properties" className="min-h-0 flex-1 overflow-y-auto">
@@ -149,6 +159,9 @@ export function Editor({ projectId }: { projectId: string }) {
             </TabsContent>
             <TabsContent value="captions" className="min-h-0 flex-1">
               <CaptionsPanel />
+            </TabsContent>
+            <TabsContent value="chapters" className="min-h-0 flex-1 overflow-y-auto">
+              <ChaptersPanel />
             </TabsContent>
             <TabsContent value="activity" className="flex min-h-0 flex-1 flex-col">
               <ActivityFeed />

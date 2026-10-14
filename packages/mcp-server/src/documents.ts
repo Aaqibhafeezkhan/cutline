@@ -155,8 +155,31 @@ export class DocumentService {
     return items.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   }
 
-  async create(input: CreateProjectInput): Promise<Project> {
-    const project = createProject(input, this.ctx);
+  /**
+   * Creates a new project as a copy of `source` (assets, settings, tracks,
+   * markers) transformed by `operations`, e.g. a highlight reel. The new
+   * project starts with an empty history.
+   */
+  async createFrom(
+    source: Project,
+    name: string,
+    operations: readonly unknown[],
+  ): Promise<{ project: Project; summary: string }> {
+    const fresh = createProject({ name, defaultTracks: false }, this.ctx);
+    const copy: Project = {
+      ...structuredClone(source),
+      id: fresh.id,
+      name: fresh.name,
+      createdAt: fresh.createdAt,
+      updatedAt: fresh.updatedAt,
+    };
+    const result = applyOperations(copy, operations, this.ctx);
+    await this.create({ name }, result.project);
+    return { project: result.project, summary: result.summary };
+  }
+
+  async create(input: CreateProjectInput, prebuilt?: Project): Promise<Project> {
+    const project = prebuilt ?? createProject(input, this.ctx);
     if (await this.store.read(project.id)) {
       throw new CutlineError('INVALID_ARGUMENT', `Project "${project.id}" already exists.`);
     }
