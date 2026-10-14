@@ -79,6 +79,12 @@ export function findProblems(project: Project): string[] {
       }
     }
   }
+  for (const marker of project.markers ?? []) {
+    seen(marker.id, 'marker');
+    if (marker.end !== undefined && marker.end <= marker.time) {
+      problems.push(`marker ${marker.id}: end must be after time`);
+    }
+  }
   return problems;
 }
 
