@@ -6,6 +6,7 @@ import { loadConfig } from '../src/config';
 import { createMcpServer } from '../src/mcp/server';
 import { StaticTranscriber } from '../src/media/transcribe';
 import { createServices, type Services } from '../src/services';
+import { spawnSync } from 'node:child_process';
 import { FFMPEG, FFPROBE, FIXTURES, fixture, hasFfmpeg, hasFixtures, tempDir } from './helpers';
 
 type Result = CallToolResult & { structuredContent?: Record<string, unknown> };
@@ -66,6 +67,7 @@ describe('tool catalogue', () => {
         'add_transition',
         'animate_clip',
         'apply_operations',
+        'create_highlight_reel',
         'create_project',
         'cut_to_beats',
         'delete_clip',
@@ -75,12 +77,15 @@ describe('tool catalogue', () => {
         'detect_scenes',
         'detect_silence',
         'duck_music',
+        'export_chapters',
         'export_video',
+        'get_chapters_input',
         'get_frames',
         'get_project',
         'get_transcript',
         'get_waveform_summary',
         'list_proposals',
+        'mark_highlights',
         'move_clip',
         'normalize_loudness',
         'redo',
@@ -88,6 +93,7 @@ describe('tool catalogue', () => {
         'render_preview',
         'set_audio_volume',
         'set_brand_kit',
+        'set_chapters',
         'set_clip_property',
         'split_clip',
         'trim_clip',
@@ -458,4 +464,141 @@ describe.runIf(hasFfmpeg && hasFixtures)('media tools via MCP (ffmpeg)', () => {
     const blocked = await call('cut_to_beats', { clipIds: [footage[0]], everyNBeats: 8 });
     expect(JSON.stringify(blocked.content)).toMatch(/OVERLAP.*Hint/);
   }, 60_000);
+});
+
+describe.runIf(hasFfmpeg && hasFixtures)('chapters and highlight reels via MCP (ffmpeg)', () => {
+  it('outlines the timeline, sets and exports chapters, marks highlights and builds reels', async () => {
+    const empty = String((await okCall('create_project', { name: 'Empty' })).projectId);
+    const nothing = await call('get_chapters_input', { projectId: empty });
+    expect(JSON.stringify(nothing.content)).toMatch(/timeline is empty/);
+
+    const projectId = String(
+      (await okCall('create_project', { name: 'Talk', width: 640, height: 360 })).projectId,
+    );
+    const asset = (await okCall('add_asset', { path: fixture('beeps-12s.mp4') })).asset as {
+      id: string;
+    };
+    for (let i = 0; i < 3; i++) await okCall('add_clip', { assetId: asset.id });
+    await okCall('add_text_overlay', { text: 'Hook', start: 1, duration: 2 });
+
+    const outline = await okCall('get_chapters_input', { projectId, minBlock: 5 });
+    expect(outline.duration).toBe(36);
+    const blocks = outline.blocks as Array<{ start: number; end: number; text: string }>;
+    expect(blocks.length).toBeGreaterThan(1);
+    expect(blocks[0]!.text).toMatch(/Hello world\./);
+    expect((outline.silences as unknown[]).length).toBeGreaterThan(0);
+    expect(Array.isArray(outline.scenes)).toBe(true);
+    expect(outline.next).toMatch(/set_chapters/);
+
+    const bad = await call('set_chapters', {
+      projectId,
+      chapters: [
+        { time: 0, title: 'Intro' },
+        { time: 5, title: 'Too soon' },
+        { time: 24, title: 'End' },
+      ],
+    });
+    expect(bad.isError).toBe(true);
+    expect((bad.content[0] as { text: string }).text).toMatch(
+      /at least 10s.*Hint: Move "Too soon"/,
+    );
+
+    const noChapters = await call('export_chapters', { projectId });
+    expect(JSON.stringify(noChapters.content)).toMatch(/no chapters.*set_chapters/);
+
+    const set = await okCall('set_chapters', {
+      projectId,
+      chapters: [
+        { time: 0, title: 'Intro' },
+        { time: 12, title: 'Middle' },
+        { time: 24, title: 'End' },
+      ],
+    });
+    expect(set.youtube).toBe('00:00 Intro\n00:12 Middle\n00:24 End');
+    const yt = await okCall('export_chapters', { projectId });
+    expect(yt.text).toBe('00:00 Intro\n00:12 Middle\n00:24 End');
+    expect(yt.warnings).toBeUndefined();
+    const meta = await okCall('export_chapters', { projectId, format: 'ffmetadata' });
+    expect(meta.text).toMatch(/^;FFMETADATA1\ntitle=Talk\n\n\[CHAPTER\]/);
+    const json = await okCall('export_chapters', { projectId, format: 'json' });
+    expect(JSON.parse(String(json.text))).toEqual([
+      { start: 0, end: 12, title: 'Intro' },
+      { start: 12, end: 24, title: 'Middle' },
+      { start: 24, end: 36, title: 'End' },
+    ]);
+    const summary = (await okCall('get_project', { projectId })).project as {
+      chapters: unknown[];
+    };
+    expect(summary.chapters).toHaveLength(3);
+
+    const noRanges = await call('create_highlight_reel', { projectId });
+    expect(JSON.stringify(noRanges.content)).toMatch(/mark_highlights/);
+
+    await okCall('mark_highlights', { projectId, ranges: [{ start: 20, end: 22 }] });
+    const marked = await okCall('mark_highlights', {
+      projectId,
+      ranges: [
+        { start: 0.5, end: 3.5, label: 'Hello' },
+        { start: 12.2, end: 14 },
+      ],
+      color: '#ffcc00',
+    });
+    expect(marked.highlights).toEqual([
+      { start: 0.5, end: 3.5, label: 'Hello' },
+      { start: 12.2, end: 14 },
+    ]);
+    expect(String((await okCall('get_chapters_input', { projectId })).summary)).toMatch(/Outline/);
+
+    const appended = await okCall('create_highlight_reel', {
+      projectId,
+      target: 'append',
+      ranges: [{ start: 0.5, end: 3.5 }],
+    });
+    expect(appended.duration).toBe(39);
+    await okCall('undo', { projectId });
+
+    const reel = await okCall('create_highlight_reel', {
+      projectId,
+      aspect: '9:16',
+      fadeBetween: 0.5,
+      title: 'Talk shorts',
+    });
+    expect(reel.sourceProjectId).toBe(projectId);
+    expect(reel.duration).toBe(4.8);
+    expect(reel.settings).toEqual({ width: 360, height: 640 });
+    expect(reel.chapters).toEqual([{ time: 0, title: 'Hello' }]);
+    const reelDoc = (await services.docs.get(String(reel.projectId))).project;
+    expect(reelDoc.name).toBe('Talk shorts');
+    expect(reelDoc.tracks.flatMap((t) => t.clips).some((c) => c.type === 'text')).toBe(true);
+    const square = await okCall('create_highlight_reel', {
+      projectId,
+      ranges: [{ start: 2, end: 4 }],
+      aspect: '1:1',
+    });
+    expect(square.settings).toEqual({ width: 640, height: 640 });
+    const wide = await okCall('create_highlight_reel', {
+      projectId: String(reel.projectId),
+      ranges: [{ start: 0, end: 1 }],
+      aspect: '16:9',
+    });
+    expect(wide.settings).toEqual({ width: 640, height: 360 });
+
+    // Exported MP4s carry the chapter markers.
+    const exported = await okCall('export_video', { projectId, quality: 'draft', width: 320 });
+    const probe = spawnSync(
+      FFPROBE,
+      ['-v', 'error', '-print_format', 'json', '-show_chapters', String(exported.path)],
+      { encoding: 'utf8', windowsHide: true },
+    );
+    const chapters = (
+      JSON.parse(probe.stdout) as {
+        chapters: Array<{ start_time: string; tags: { title: string } }>;
+      }
+    ).chapters;
+    expect(chapters.map((c) => [Math.round(Number(c.start_time)), c.tags.title])).toEqual([
+      [0, 'Intro'],
+      [12, 'Middle'],
+      [24, 'End'],
+    ]);
+  }, 120_000);
 });

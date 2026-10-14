@@ -13,7 +13,7 @@
   <a href="https://github.com/Aepzie/cutline/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/Aepzie/cutline/actions/workflows/ci.yml/badge.svg"></a>
   <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
   <img alt="TypeScript strict" src="https://img.shields.io/badge/TypeScript-strict-3178c6.svg">
-  <img alt="MCP" src="https://img.shields.io/badge/MCP-35%20tools-8a63d2.svg">
+  <img alt="MCP" src="https://img.shields.io/badge/MCP-40%20tools-8a63d2.svg">
 </p>
 
 > 🎬 _Demo GIF placeholder: Claude removes silences and adds captions while the timeline updates live. (Contributions welcome: record one with `pnpm --filter @cutline/mcp-server demo`.)_
@@ -56,10 +56,14 @@ the mouse, an agent can do with a tool call (and vice versa).
 - **Suggestion mode** ("pull requests for edits"): switch Agent to _Suggest_ and agent edits
   become proposals with a change summary; preview each one in the player (proposed clips are
   outlined on the timeline), then accept (one undo step) or reject it, or accept all at once
+- **Chapters, markers and highlight reels**: chapters, notes and highlight spans on the ruler
+  (`M` drops a marker, double-click renames), a Chapters panel with "Copy for YouTube", chapters
+  embedded in exported MP4s, and an agent that finds chapters and highlights and assembles the best
+  moments into a reel (optionally 9:16)
 - Shared undo/redo: undo the agent's change, or let the agent undo yours
 - Export in the browser (WebCodecs in a Web Worker, MP4 H.264/AAC) or on the server (ffmpeg)
 
-**MCP server (35 tools)**
+**MCP server (40 tools)**
 
 - **Editing:** `create_project`, `get_project`, `add_asset`, `add_clip`, `split_clip`, `trim_clip`,
   `move_clip`, `delete_clip`, `delete_range`, `remove_filler_words`, `delete_words`,
@@ -74,6 +78,9 @@ the mouse, an agent can do with a tool call (and vice versa).
   `cut_to_beats` (lays footage out so every cut lands on a beat, one undo step)
 - **Audio:** `duck_music` (music automatically gets quieter while someone speaks),
   `normalize_loudness` (EBU R128 measurement, clip volume set to a LUFS target)
+- **Chapters & highlights:** `get_chapters_input` (transcript blocks, scene cuts, silences and
+  loud moments in one call), `set_chapters` (YouTube rules), `export_chapters` (YouTube text,
+  ffmetadata, JSON), `mark_highlights`, `create_highlight_reel` (new project or appended, one step)
 - **Output:** `render_preview`, `export_video`
 - **Review:** `list_proposals` (edits waiting for the user's review in suggest mode; agents cannot
   switch the mode themselves)

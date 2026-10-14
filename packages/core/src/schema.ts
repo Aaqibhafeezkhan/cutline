@@ -337,6 +337,27 @@ export const TrackSchema = z.object({
   clips: z.array(ClipSchema).default([]),
 });
 
+// ---------------------------------------------------------------------------
+// Markers
+// ---------------------------------------------------------------------------
+
+export const MARKER_KINDS = ['chapter', 'note', 'highlight'] as const;
+export const MarkerKindSchema = z.enum(MARKER_KINDS);
+
+/**
+ * A named point (or span, with `end`) on the timeline: chapters for YouTube
+ * and MP4 chapter metadata, notes, and highlight ranges. Markers follow
+ * ripple edits of the whole timeline.
+ */
+export const MarkerSchema = z.object({
+  id: IdSchema,
+  time: TimeSchema.describe('Timeline time in seconds'),
+  label: z.string().max(200).default(''),
+  kind: MarkerKindSchema.default('note'),
+  end: TimeSchema.optional().describe('End of a span marker (e.g. a highlight), seconds'),
+  color: ColorSchema.optional(),
+});
+
 export const ProjectSchema = z.object({
   schemaVersion: z.literal(SCHEMA_VERSION),
   id: IdSchema,
@@ -346,6 +367,7 @@ export const ProjectSchema = z.object({
   settings: ProjectSettingsSchema.prefault({}),
   assets: z.array(AssetSchema).default([]),
   tracks: z.array(TrackSchema).default([]),
+  markers: z.array(MarkerSchema).max(5000).optional().describe('Chapters, notes and highlights'),
 });
 
 // ---------------------------------------------------------------------------
@@ -388,6 +410,8 @@ export type VisualClip = VideoClip | ImageClip | TextClip | ShapeClip;
 export type TrackKind = z.output<typeof TrackKindSchema>;
 export type Track = z.output<typeof TrackSchema>;
 export type Project = z.output<typeof ProjectSchema>;
+export type MarkerKind = z.output<typeof MarkerKindSchema>;
+export type Marker = z.output<typeof MarkerSchema>;
 
 /** Which clip types each track kind accepts. */
 export const TRACK_ACCEPTS: Record<TrackKind, readonly ClipType[]> = {

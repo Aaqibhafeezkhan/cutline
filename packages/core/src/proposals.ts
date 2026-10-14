@@ -75,7 +75,7 @@ export function replayContext(ctx: OpContext, ids: readonly string[]): OpContext
 // Diff
 // ---------------------------------------------------------------------------
 
-export type ChangeEntity = 'project' | 'track' | 'clip' | 'asset';
+export type ChangeEntity = 'project' | 'track' | 'clip' | 'asset' | 'marker';
 
 export interface ProjectChange {
   kind: 'added' | 'removed' | 'changed';
@@ -147,7 +147,8 @@ function diffById<T extends { id: string }>(
 
 /**
  * Lists what differs between two versions of a project: tracks, clips and
- * assets added/removed/changed, plus project-level changes (name, settings).
+ * assets and markers added/removed/changed, plus project-level changes
+ * (name, settings).
  */
 export function diffProjects(a: Project, b: Project): ProjectChange[] {
   const changes: ProjectChange[] = [];
@@ -201,6 +202,16 @@ export function diffProjects(a: Project, b: Project): ProjectChange[] {
       b.assets,
       'asset',
       (x) => `${x.kind} asset "${shorten(x.name)}"`,
+      (x, y) => changedKeys(x, y),
+    ),
+  );
+
+  changes.push(
+    ...diffById(
+      a.markers ?? [],
+      b.markers ?? [],
+      'marker',
+      (m) => `${m.kind} marker ${m.label ? `"${shorten(m.label)}"` : m.id} at ${m.time}s`,
       (x, y) => changedKeys(x, y),
     ),
   );

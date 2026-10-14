@@ -9,6 +9,7 @@ import {
   IdSchema,
   KeyframeSchema,
   LogoPositionSchema,
+  MarkerKindSchema,
   ProjectSettingsSchema,
   ShapeKindSchema,
   TimeSchema,
@@ -409,6 +410,90 @@ export const DuckAudioOpSchema = z.object({
     .describe('Seconds to ramp back up after each range (default 0.4)'),
 });
 
+export const MarkerInputSchema = z
+  .object({
+    time: TimeSchema.describe('Timeline time in seconds'),
+    label: z.string().max(200).default(''),
+    kind: MarkerKindSchema.default('note').describe('"chapter", "note" (default) or "highlight"'),
+    end: TimeSchema.optional().describe('End of a span (e.g. a highlight range), seconds'),
+    color: ColorSchema.optional(),
+    id: IdSchema.optional(),
+  })
+  .refine((m) => m.end === undefined || m.end > m.time, { message: 'end must be after time' });
+
+export const AddMarkersOpSchema = z.object({
+  type: z.literal('add_markers'),
+  markers: z.array(MarkerInputSchema).min(1).max(1000),
+});
+
+export const UpdateMarkerOpSchema = z.object({
+  type: z.literal('update_marker'),
+  markerId: IdSchema,
+  time: TimeSchema.optional(),
+  label: z.string().max(200).optional(),
+  kind: MarkerKindSchema.optional(),
+  end: TimeSchema.nullable().optional().describe('Span end; null makes it a point marker'),
+  color: ColorSchema.nullable().optional().describe('null removes the color'),
+});
+
+export const RemoveMarkersOpSchema = z
+  .object({
+    type: z.literal('remove_markers'),
+    markerIds: z.array(IdSchema).min(1).max(5000).optional(),
+    kind: MarkerKindSchema.optional().describe('Remove all markers of this kind'),
+  })
+  .refine((o) => (o.markerIds === undefined) !== (o.kind === undefined), {
+    message: 'give exactly one of markerIds or kind',
+  });
+
+export const ChapterInputSchema = z.object({
+  time: TimeSchema.describe('Chapter start, timeline seconds'),
+  title: z.string().min(1).max(200),
+});
+
+export const SetChaptersOpSchema = z.object({
+  type: z.literal('set_chapters'),
+  chapters: z
+    .array(ChapterInputSchema)
+    .max(500)
+    .describe('Chapters in time order; replaces all chapter markers ([] removes them)'),
+  youtube: z
+    .boolean()
+    .default(true)
+    .describe(
+      'Enforce YouTube rules (first at 0, at least 3, each ≥ 10 s apart). Default true; false only needs increasing times',
+    ),
+});
+
+export const ReelRangeSchema = z
+  .object({
+    start: TimeSchema,
+    end: TimeSchema,
+    label: z.string().max(200).optional().describe('Becomes a chapter marker in the reel'),
+  })
+  .refine((r) => r.end > r.start, { message: 'end must be greater than start' });
+
+export const AssembleRangesOpSchema = z.object({
+  type: z.literal('assemble_ranges'),
+  ranges: z
+    .array(ReelRangeSchema)
+    .min(1)
+    .max(200)
+    .describe('Timeline ranges, played back-to-back in this order'),
+  mode: z
+    .enum(['append', 'replace'])
+    .default('append')
+    .describe(
+      '"append" adds the reel after the timeline end; "replace" makes it the whole timeline',
+    ),
+  fadeBetween: z
+    .number()
+    .min(0)
+    .max(2)
+    .default(0)
+    .describe('Crossfade between ranges in seconds (0 = hard cuts)'),
+});
+
 export const OperationSchema = z.discriminatedUnion('type', [
   UpdateProjectOpSchema,
   SetAgentModeOpSchema,
@@ -434,6 +519,11 @@ export const OperationSchema = z.discriminatedUnion('type', [
   DuckAudioOpSchema,
   SetBrandOpSchema,
   AddLogoOpSchema,
+  AddMarkersOpSchema,
+  UpdateMarkerOpSchema,
+  RemoveMarkersOpSchema,
+  SetChaptersOpSchema,
+  AssembleRangesOpSchema,
 ]);
 
 export type Operation = z.output<typeof OperationSchema>;

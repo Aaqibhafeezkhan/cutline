@@ -19,6 +19,8 @@ export * from './captions';
 export * from './fillers';
 export * from './transcript-edit';
 export * from './summarize';
+export * from './markers';
+export * from './outline';
 export * from './operations/schemas';
 export {
   applyOperation,

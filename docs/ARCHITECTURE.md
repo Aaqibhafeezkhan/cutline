@@ -136,6 +136,10 @@ sequenceDiagram
   (`FORBIDDEN`) in any mode, `update_project` cannot touch `agentMode`, and agents cannot
   undo/redo while their edits are under review. Batches that only import media (`add_asset`) are
   applied directly, since they only fill the asset bin and later proposals need the asset ids.
+  Creating a _new_ project (`create_project`, `create_highlight_reel` into a new project) is
+  not held for review either: it leaves the reviewed project untouched, and the copy inherits its
+  agent mode. Marker operations (chapters, notes, highlights) are proposed like any other edit
+  and show up in the change list.
 
 ### 4. Rendering
 

@@ -149,6 +149,40 @@ describe('diffProjects', () => {
     );
   });
 
+  it('lists marker changes (chapters, notes, highlights)', () => {
+    const { project: a, ctx } = timeline();
+    const b = applyOperations(
+      a,
+      [
+        {
+          type: 'add_markers',
+          markers: [
+            { time: 0, label: 'Intro', kind: 'chapter' },
+            { time: 2, kind: 'note' },
+          ],
+        },
+      ],
+      ctx,
+    ).project;
+    const added = diffProjects(a, b).map(formatChange);
+    expect(added).toHaveLength(2);
+    expect(added[0]).toBe('Added chapter marker "Intro" at 0s');
+    expect(added[1]).toMatch(/^Added note marker \S+ at 2s$/);
+    const [intro, note] = b.markers!;
+    const c = applyOperations(
+      b,
+      [
+        { type: 'update_marker', markerId: intro!.id, label: 'Welcome' },
+        { type: 'remove_markers', markerIds: [note!.id] },
+      ],
+      ctx,
+    ).project;
+    expect(diffProjects(b, c).map(formatChange)).toEqual([
+      `Removed note marker ${note!.id} at 2s`,
+      'Changed chapter marker "Welcome" at 0s (label)',
+    ]);
+  });
+
   it('falls back to the clip id when the asset is unknown and counts asset changes', () => {
     const { project: a } = timeline();
     const b: Project = {
