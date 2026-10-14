@@ -1,6 +1,7 @@
 import { useMemo, type PointerEvent } from 'react';
 import { usePlayhead } from '@/lib/store';
 import { RULER_HEIGHT, rulerLabel, tickStep } from './geometry';
+import { MarkerLane } from './Markers';
 
 export function Ruler({
   width,
@@ -51,9 +52,10 @@ export function Ruler({
           />
         </div>
       ))}
+      <MarkerLane zoom={zoom} />
       <div
         aria-hidden
-        className="absolute bottom-0 size-0 -translate-x-[5px] border-x-[5px] border-b-[8px] border-x-transparent border-b-red-500"
+        className="pointer-events-none absolute bottom-0 size-0 -translate-x-[5px] border-x-[5px] border-b-[8px] border-x-transparent border-b-red-500"
         style={{ left: time * zoom }}
       />
     </div>

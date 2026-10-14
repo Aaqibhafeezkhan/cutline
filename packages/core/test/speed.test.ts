@@ -322,6 +322,36 @@ describe('split and trim with speed', () => {
     expect(clip(r.project, 'clip_5')).toMatchObject({ sourceStart: 4, duration: 3 });
   });
 
+  it('keeps speed, reverse and freeze frames in assembled reels', () => {
+    const { p, ctx } = setup();
+    const r = run(
+      p,
+      [
+        { type: 'set_speed', clipId: 'clip_1', speed: 2, reverse: true },
+        { type: 'freeze_frame', clipId: 'clip_2', time: 11, duration: 1, newClipId: 'hold' },
+        {
+          type: 'assemble_ranges',
+          ranges: [
+            { start: 1, end: 3 },
+            { start: 11, end: 12 },
+          ],
+          mode: 'replace',
+        },
+      ],
+      ctx,
+    ).project;
+    const clips = r.tracks[0]!.clips as VideoClip[];
+    // clip_1 (0–5, source 0–10 reversed at 2×): timeline 1–3 is source 4–8.
+    expect(clips[0]).toMatchObject({
+      start: 0,
+      duration: 2,
+      speed: 2,
+      reverse: true,
+      sourceStart: 4,
+    });
+    expect(clips[1]).toMatchObject({ start: 2, duration: 1, freeze: true, sourceStart: 13 });
+  });
+
   it('checks trims against the asset at the clip speed', () => {
     const { p, ctx } = setup();
     const fast = run(

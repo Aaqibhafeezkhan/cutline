@@ -19,8 +19,10 @@ import {
   splitClipOp,
   trimClip,
 } from './clips';
+import { addMarkers, removeMarkers, setChapters, updateMarker } from './markers';
 import type { OpOutcome } from './outcome';
 import { addCaptions, addShape, addText } from './overlays';
+import { assembleRanges } from './reel';
 import { OperationSchema, type OpOf, type Operation, type OperationType } from './schemas';
 import { freezeFrame, setSpeed } from './speed';
 import {
@@ -61,6 +63,11 @@ const HANDLERS: { [K in OperationType]: Handler<K> } = {
   add_logo: addLogo,
   set_speed: setSpeed,
   freeze_frame: freezeFrame,
+  add_markers: addMarkers,
+  update_marker: updateMarker,
+  remove_markers: removeMarkers,
+  set_chapters: setChapters,
+  assemble_ranges: assembleRanges,
 };
 
 export function parseOperation(input: unknown): Operation {

@@ -2,7 +2,9 @@ import {
   TEMPLATE_LABELS,
   clipEnd,
   isFreeze,
+  randomId,
   templateOperations,
+  type MarkerKind,
   type OperationInput,
   type TemplateKind,
 } from '@cutline/core';
@@ -63,9 +65,30 @@ export async function freezeAtPlayhead(): Promise<void> {
 }
 
 export async function deleteSelection(ripple: boolean): Promise<void> {
-  const { selection, dispatch, select } = useEditor.getState();
+  const { project, selection, dispatch, select } = useEditor.getState();
   if (selection.length === 0) return;
-  if (await dispatch([{ type: 'delete_clips', clipIds: selection, ripple }])) select([]);
+  // The selection can hold clips and timeline markers.
+  const markerIds = new Set((project?.markers ?? []).map((m) => m.id));
+  const markers = selection.filter((id) => markerIds.has(id));
+  const clips = selection.filter((id) => !markerIds.has(id));
+  const ops: OperationInput[] = [
+    ...(markers.length ? [{ type: 'remove_markers' as const, markerIds: markers }] : []),
+    ...(clips.length ? [{ type: 'delete_clips' as const, clipIds: clips, ripple }] : []),
+  ];
+  if (await dispatch(ops)) select([]);
+}
+
+/** Adds a marker at the playhead and selects it (M); double-click it on the ruler to rename. */
+export async function addMarker(kind: MarkerKind = 'note'): Promise<void> {
+  const { project, dispatch, select } = useEditor.getState();
+  if (!project) return;
+  const count = (project.markers ?? []).filter((m) => m.kind === kind).length + 1;
+  const id = randomId('marker');
+  const label = kind === 'chapter' ? `Chapter ${count}` : `Note ${count}`;
+  if (
+    await dispatch([{ type: 'add_markers', markers: [{ id, time: currentTime(), kind, label }] }])
+  )
+    select([id]);
 }
 
 /** Moves the selected clips by `delta` seconds (keyboard nudge). */

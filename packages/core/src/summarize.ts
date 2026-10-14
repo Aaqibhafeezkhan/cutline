@@ -1,4 +1,5 @@
 import { clipSpeed, isFreeze, isReversed, sourceSpan } from './clipmath';
+import { chapterList } from './markers';
 import { projectDuration } from './queries';
 import type { Clip, Project } from './schema';
 import { clipEnd } from './schema';
@@ -76,6 +77,8 @@ export function summarizeProject(project: Project, options: { maxClipsPerTrack?:
   const max = options.maxClipsPerTrack ?? 200;
   const assetNames = new Map(project.assets.map((a) => [a.id, a.name]));
   const brand = project.settings.brand;
+  const chapters = chapterList(project);
+  const others = (project.markers ?? []).filter((m) => m.kind !== 'chapter');
   return {
     id: project.id,
     name: project.name,
@@ -105,6 +108,20 @@ export function summarizeProject(project: Project, options: { maxClipsPerTrack?:
       ...(a.width && a.height ? { size: `${a.width}x${a.height}` } : {}),
       hasAudio: a.hasAudio,
     })),
+    ...(chapters.length && {
+      /** Chapter markers in time order (YouTube description / MP4 chapters). */
+      chapters: chapters.map((c) => ({ time: r3(c.time), title: c.title })),
+    }),
+    ...(others.length && {
+      /** Note and highlight markers (highlights may span until `end`). */
+      markers: others.slice(0, max).map((m) => ({
+        id: m.id,
+        kind: m.kind,
+        time: r3(m.time),
+        ...(m.end !== undefined && { end: r3(m.end) }),
+        label: m.label,
+      })),
+    }),
     tracks: project.tracks.map((t, index) => ({
       id: t.id,
       name: t.name,

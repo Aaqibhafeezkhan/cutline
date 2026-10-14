@@ -9,7 +9,8 @@ import {
 } from '@cutline/core';
 
 export const TRACK_HEIGHT: Record<Track['kind'], number> = { video: 52, audio: 44, caption: 34 };
-export const RULER_HEIGHT = 26;
+/** Tick labels on top, the marker strip (chapters, notes, highlights) below. */
+export const RULER_HEIGHT = 40;
 export const HEADER_WIDTH = 148;
 /** Snap distance in screen pixels. */
 export const SNAP_PX = 8;

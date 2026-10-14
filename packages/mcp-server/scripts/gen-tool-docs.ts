@@ -61,6 +61,13 @@ const GROUPS: Record<string, string[]> = {
   ],
   Music: ['detect_beats', 'cut_to_beats'],
   Audio: ['duck_music', 'normalize_loudness'],
+  'Chapters & highlights': [
+    'get_chapters_input',
+    'set_chapters',
+    'export_chapters',
+    'mark_highlights',
+    'create_highlight_reel',
+  ],
   Output: ['render_preview', 'export_video'],
 };
 

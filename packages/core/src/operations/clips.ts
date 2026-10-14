@@ -23,6 +23,7 @@ import {
   type TrackKind,
 } from '../schema';
 import { EPSILON, formatRange, formatTime, roundTime } from '../time';
+import { mainTrack, rippleMarkersRemove, shiftMarkers } from '../markers';
 import { mergeRanges } from '../ranges';
 import { outcome, type OpOutcome } from './outcome';
 import { applyAnimations, applyPropsPatch, assertTransitionFits } from './props';
@@ -165,7 +166,16 @@ export function trimClip(draft: Project, op: OpOf<'trim_clip'>): OpOutcome {
   log.modified.push(clip.id);
   if (op.ripple) {
     trimmed.start = clip.start;
-    shiftClips(track, oldEnd, to - from - clip.duration, log);
+    const delta = to - from - clip.duration;
+    shiftClips(track, oldEnd, delta, log);
+    if (track.id === mainTrack(draft)?.id) {
+      // Markers follow the content: first the out-point change, then the in-point change.
+      const cutEnd = to - clip.duration;
+      if (cutEnd < 0) log.removed.push(...rippleMarkersRemove(draft, clip.start + to, oldEnd));
+      else shiftMarkers(draft, oldEnd, cutEnd);
+      if (from > 0) log.removed.push(...rippleMarkersRemove(draft, clip.start, clip.start + from));
+      else shiftMarkers(draft, clip.start, -from);
+    }
   } else {
     const collisions = overlappingClips(track, trimmed.start, clipEnd(trimmed), clip.id);
     if (collisions.length > 0) {
@@ -209,12 +219,16 @@ export function deleteClips(draft: Project, op: OpOf<'delete_clips'>): OpOutcome
     byTrack.set(track, [...(byTrack.get(track) ?? []), clip]);
     log.removed.push(clip.id);
   }
+  const mainId = mainTrack(draft)?.id;
   for (const [track, clips] of byTrack) {
     const ids = new Set(clips.map((c) => c.id));
     track.clips = track.clips.filter((c) => !ids.has(c.id));
     if (op.ripple) {
       for (const c of [...clips].sort((a, b) => b.start - a.start)) {
         shiftClips(track, clipEnd(c), -c.duration, log);
+        if (track.id === mainId) {
+          log.removed.push(...rippleMarkersRemove(draft, c.start, clipEnd(c)));
+        }
       }
     }
   }
@@ -232,12 +246,15 @@ export function deleteRange(draft: Project, op: OpOf<'delete_range'>, ctx: OpCon
   const ranges = mergeRanges(op.ranges);
   const log = emptyLog();
   let total = 0;
+  // Markers follow a ripple of the whole timeline (not of a few tracks).
+  const moveMarkers = op.ripple && !op.trackIds;
   for (const r of [...ranges].reverse()) {
     total += r.end - r.start;
     for (const track of tracks) {
       carveRange(track, r.start, r.end, ctx, log);
       if (op.ripple) shiftClips(track, r.end, -(r.end - r.start), log);
     }
+    if (moveMarkers) log.removed.push(...rippleMarkersRemove(draft, r.start, r.end));
   }
   const skipped = draft.tracks.filter((t) => t.locked).map((t) => t.name);
   const note =
