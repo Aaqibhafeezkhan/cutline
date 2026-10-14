@@ -84,6 +84,7 @@ describe('tool catalogue', () => {
         'get_project',
         'get_transcript',
         'get_waveform_summary',
+        'list_proposals',
         'mark_highlights',
         'move_clip',
         'normalize_loudness',

@@ -1,15 +1,21 @@
+import { randomBytes } from 'node:crypto';
 import { EventEmitter } from 'node:events';
 import {
   CutlineError,
+  agentModeOf,
   applyOperations,
   createHistory,
   createProject,
   defaultContext,
   describeHistory,
+  diffProjects,
+  isCutlineError,
   migrateProject,
   projectDuration,
   recordHistory,
+  recordingContext,
   redo,
+  replayContext,
   undo,
   type ActivityMessage,
   type ApplyResult,
@@ -20,10 +26,12 @@ import {
   type OpContext,
   type Origin,
   type Project,
+  type Proposal,
   type RecentChange,
 } from '@cutline/core';
 import { log } from './log';
 import type { ProjectStore } from './storage/types';
+import { toolScope } from './tool-scope';
 
 export interface ChangeEvent {
   projectId: string;
@@ -49,12 +57,18 @@ export interface ProjectListItem {
   clipCount: number;
 }
 
+export interface ProposalsEvent {
+  projectId: string;
+  proposals: Proposal[];
+}
+
 interface Doc {
   project: Project;
   version: number;
   history: HistoryState;
   queue: Promise<unknown>;
   saveTimer: NodeJS.Timeout | null;
+  proposals: Proposal[];
 }
 
 export interface LoadedProject {
@@ -66,6 +80,13 @@ export interface LoadedProject {
 export interface EditResult extends ApplyResult {
   version: number;
   history: HistoryInfo;
+  /** Set when the edit was proposed for review instead of applied (suggest mode). */
+  proposal?: Proposal;
+}
+
+export interface ProposalOutcome {
+  accepted: Proposal[];
+  stale: Proposal[];
 }
 
 /** Short debounce: coalesces bursts of edits but keeps the data-loss window tiny. */
@@ -80,6 +101,7 @@ export class DocumentService {
   readonly events = new EventEmitter<{
     change: [ChangeEvent];
     activity: [ActivityEvent];
+    proposals: [ProposalsEvent];
   }>();
   /** Most recently edited/opened project, used when a tool call omits projectId. */
   private lastTouched: string | null = null;
@@ -87,6 +109,8 @@ export class DocumentService {
   constructor(
     private readonly store: ProjectStore,
     private readonly ctx: OpContext = defaultContext,
+    /** Where pending proposals are kept (per project id); null keeps them in memory. */
+    private readonly proposalStore: ProjectStore | null = null,
   ) {
     this.events.setMaxListeners(100);
   }
@@ -110,6 +134,7 @@ export class DocumentService {
           history: createHistory(),
           queue: Promise.resolve(),
           saveTimer: null,
+          proposals: loadProposals(await this.proposalStore?.read(id)),
         };
       })();
       entry.catch(() => this.docs.delete(id));
@@ -192,6 +217,7 @@ export class DocumentService {
         history: createHistory(),
         queue: Promise.resolve(),
         saveTimer: null,
+        proposals: [],
       }),
     );
     this.lastTouched = project.id;
@@ -232,42 +258,167 @@ export class DocumentService {
     return latest.id;
   }
 
+  /**
+   * Applies operations as one history entry. Agent edits on a project in
+   * "suggest" mode are not applied: they become a proposal (returned as
+   * `proposal`, with `project` showing the would-be result).
+   */
   async apply(
     id: string,
     operations: readonly unknown[],
     origin: Origin,
     label?: string,
   ): Promise<EditResult> {
-    return this.exclusive(id, (doc) => {
+    return this.exclusive(id, async (doc) => {
+      if (origin.kind === 'agent') {
+        assertAgentAllowed(operations);
+        if (agentModeOf(doc.project) === 'suggest' && !importOnly(operations)) {
+          return this.propose(id, doc, operations, origin, label);
+        }
+      }
       const result = applyOperations(doc.project, operations, this.ctx);
-      doc.project = result.project;
-      doc.version++;
-      const entryLabel = label ?? truncate(result.summary, 80);
-      doc.history = recordHistory(doc.history, {
-        id: `${doc.version}`,
-        label: entryLabel,
-        origin,
-        at: this.ctx.now(),
-        affectedIds: result.affectedIds,
-        patches: result.patches,
-        inversePatches: result.inversePatches,
-      });
-      this.lastTouched = id;
-      this.scheduleSave(id, doc);
-      const history = describeHistory(doc.history);
-      this.events.emit('change', {
-        projectId: id,
-        version: doc.version,
-        project: doc.project,
-        patches: result.patches,
-        origin,
-        label: entryLabel,
-        summary: result.summary,
-        affectedIds: result.affectedIds,
-        history,
-        kind: 'edit',
-      });
-      return { ...result, version: doc.version, history };
+      return this.commit(id, doc, result, origin, label ?? truncate(result.summary, 80));
+    });
+  }
+
+  private commit(
+    id: string,
+    doc: Doc,
+    result: ApplyResult,
+    origin: Origin,
+    entryLabel: string,
+  ): EditResult {
+    doc.project = result.project;
+    doc.version++;
+    doc.history = recordHistory(doc.history, {
+      id: `${doc.version}`,
+      label: entryLabel,
+      origin,
+      at: this.ctx.now(),
+      affectedIds: result.affectedIds,
+      patches: result.patches,
+      inversePatches: result.inversePatches,
+    });
+    this.lastTouched = id;
+    this.scheduleSave(id, doc);
+    const history = describeHistory(doc.history);
+    this.events.emit('change', {
+      projectId: id,
+      version: doc.version,
+      project: doc.project,
+      patches: result.patches,
+      origin,
+      label: entryLabel,
+      summary: result.summary,
+      affectedIds: result.affectedIds,
+      history,
+      kind: 'edit',
+    });
+    return { ...result, version: doc.version, history };
+  }
+
+  // --- suggestion mode --------------------------------------------------------
+
+  private async propose(
+    id: string,
+    doc: Doc,
+    operations: readonly unknown[],
+    origin: Origin,
+    label: string | undefined,
+  ): Promise<EditResult> {
+    const recorder = recordingContext(this.ctx);
+    // Dry run: validates the operations and shows what they would do.
+    const result = applyOperations(doc.project, operations, recorder.ctx);
+    const scope = toolScope.getStore();
+    const text = label ?? truncate(result.summary, 80);
+    const proposal: Proposal = {
+      id: `prop_${randomBytes(6).toString('hex')}`,
+      projectId: id,
+      label: truncate(scope ? `${scope.tool}: ${text}` : text, 120),
+      summary: result.summary,
+      operations: result.operations,
+      ids: recorder.ids,
+      baseVersion: doc.version,
+      createdAt: this.ctx.now(),
+      origin,
+      status: 'pending',
+      changes: diffProjects(doc.project, result.project),
+      affectedIds: result.affectedIds,
+    };
+    doc.proposals.push(proposal);
+    scope?.proposals.push(proposal);
+    this.lastTouched = id;
+    await this.saveProposals(id, doc);
+    return {
+      ...result,
+      version: doc.version,
+      history: describeHistory(doc.history),
+      proposal,
+    };
+  }
+
+  private async saveProposals(id: string, doc: Doc): Promise<void> {
+    this.events.emit('proposals', { projectId: id, proposals: doc.proposals });
+    if (!this.proposalStore) return;
+    try {
+      if (doc.proposals.length) await this.proposalStore.write(id, doc.proposals);
+      else await this.proposalStore.delete(id);
+    } catch (err) {
+      log.error(`saving proposals of ${id} failed`, err);
+    }
+  }
+
+  /** Pending agent proposals of a project, oldest first. */
+  async proposals(id: string): Promise<Proposal[]> {
+    return (await this.load(id)).proposals;
+  }
+
+  /**
+   * Accepts one proposal (or all with `proposalId` undefined): each is applied
+   * as one history entry, even if the project changed since it was proposed.
+   * Proposals that no longer apply are marked "stale" and kept for review.
+   */
+  async acceptProposal(id: string, proposalId: string | undefined): Promise<ProposalOutcome> {
+    return this.exclusive(id, async (doc) => {
+      const targets =
+        proposalId === undefined ? [...doc.proposals] : [findProposal(doc, proposalId)];
+      const outcome: ProposalOutcome = { accepted: [], stale: [] };
+      for (const p of targets) {
+        try {
+          const result = applyOperations(doc.project, p.operations, replayContext(this.ctx, p.ids));
+          this.commit(id, doc, result, p.origin, truncate(`Accepted ${p.label}`, 120));
+          doc.proposals = doc.proposals.filter((x) => x.id !== p.id);
+          outcome.accepted.push(p);
+        } catch (err) {
+          p.status = 'stale';
+          p.error = isCutlineError(err)
+            ? err.toJSON()
+            : { code: 'INVARIANT', message: err instanceof Error ? err.message : String(err) };
+          outcome.stale.push(p);
+        }
+      }
+      await this.saveProposals(id, doc);
+      const [first] = outcome.stale;
+      if (proposalId !== undefined && first) {
+        throw new CutlineError(
+          'STALE',
+          `Proposal ${first.id} no longer applies: ${first.error!.message}`,
+          {
+            hint: 'The project changed since the agent proposed this. Reject it and ask the agent to try again.',
+          },
+        );
+      }
+      return outcome;
+    });
+  }
+
+  /** Discards one proposal (or all with `proposalId` undefined). */
+  async rejectProposal(id: string, proposalId: string | undefined): Promise<Proposal[]> {
+    return this.exclusive(id, async (doc) => {
+      const removed = proposalId === undefined ? doc.proposals : [findProposal(doc, proposalId)];
+      doc.proposals = doc.proposals.filter((p) => !removed.includes(p));
+      await this.saveProposals(id, doc);
+      return removed;
     });
   }
 
@@ -281,6 +432,15 @@ export class DocumentService {
 
   private step(id: string, origin: Origin, kind: 'undo' | 'redo') {
     return this.exclusive(id, (doc) => {
+      if (origin.kind === 'agent' && agentModeOf(doc.project) === 'suggest') {
+        throw new CutlineError(
+          'FORBIDDEN',
+          `The user reviews your edits (suggest mode), so you cannot ${kind} directly.`,
+          {
+            hint: 'Propose the change you want with the editing tools instead; list_proposals shows what is waiting for review.',
+          },
+        );
+      }
       const step =
         kind === 'undo' ? undo(doc.project, doc.history) : redo(doc.project, doc.history);
       doc.project = step.project;
@@ -322,6 +482,40 @@ export class DocumentService {
       }
     }
   }
+}
+
+/** Agents may edit, but never change how their own edits are reviewed. */
+function assertAgentAllowed(operations: readonly unknown[]): void {
+  if (operations.some((op) => typeOf(op) === 'set_agent_mode')) {
+    throw new CutlineError('FORBIDDEN', 'Only the user can change the agent mode.', {
+      hint: 'The user switches between Direct and Suggest in the editor top bar. Leave set_agent_mode out of your operations.',
+    });
+  }
+}
+
+/** Importing media only adds to the asset bin, so it is not held for review. */
+function importOnly(operations: readonly unknown[]): boolean {
+  return operations.length > 0 && operations.every((op) => typeOf(op) === 'add_asset');
+}
+
+function typeOf(op: unknown): unknown {
+  return typeof op === 'object' && op !== null ? (op as { type?: unknown }).type : undefined;
+}
+
+function findProposal(doc: Doc, proposalId: string): Proposal {
+  const found = doc.proposals.find((p) => p.id === proposalId);
+  if (!found) {
+    throw new CutlineError('NOT_FOUND', `Proposal "${proposalId}" not found.`, {
+      hint: doc.proposals.length
+        ? `Pending proposals: ${doc.proposals.map((p) => p.id).join(', ')}.`
+        : 'There are no pending proposals (it may have been accepted or rejected already).',
+    });
+  }
+  return found;
+}
+
+function loadProposals(raw: unknown): Proposal[] {
+  return Array.isArray(raw) ? (raw as Proposal[]) : [];
 }
 
 function truncate(s: string, n: number): string {

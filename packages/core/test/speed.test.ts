@@ -5,7 +5,10 @@ import {
   applyOperation,
   assertSourceRange,
   clipSpeed,
+  describeChanges,
+  diffProjects,
   findProblems,
+  formatChange,
   isFreeze,
   isReversed,
   mapSourceRangeToTimeline,
@@ -576,6 +579,26 @@ describe('validation, summaries and mappings', () => {
     const bad = structuredClone(frozen);
     (bad.tracks[0]!.clips[1] as VideoClip).sourceStart = 20;
     expect(findProblems(bad).join()).toMatch(/freeze frame at 20s is not inside asset/);
+  });
+
+  it('reports speed, reverse and freeze frames in proposal diffs', () => {
+    const { p, ctx } = setup();
+    const r = run(
+      p,
+      [
+        { type: 'set_speed', clipId: 'clip_1', speed: 2, reverse: true },
+        { type: 'freeze_frame', clipId: 'clip_2', time: 11, newClipId: 'hold' },
+      ],
+      ctx,
+    ).project;
+    const changes = diffProjects(p, r);
+    expect(changes.map(formatChange)).toEqual(
+      expect.arrayContaining([
+        'Changed video clip "interview.mp4" on V1 (duration, reverse, speed)',
+        'Added video clip "Freeze frame" on V1',
+      ]),
+    );
+    expect(describeChanges(changes)).toMatch(/clips? added/);
   });
 
   it('summarizes speed, reverse and freeze frames', () => {

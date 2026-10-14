@@ -21,6 +21,18 @@ export function updateProject(draft: Project, op: OpOf<'update_project'>): OpOut
   return outcome(`Project ${changes.join(', ') || 'unchanged'}.`, {}, [draft.id]);
 }
 
+export function setAgentMode(draft: Project, op: OpOf<'set_agent_mode'>): OpOutcome {
+  if (op.mode === 'direct') delete draft.settings.agentMode;
+  else draft.settings.agentMode = op.mode;
+  return outcome(
+    op.mode === 'suggest'
+      ? 'Agent edits are now proposed for review.'
+      : 'Agent edits now apply directly.',
+    {},
+    [draft.id],
+  );
+}
+
 export function addAsset(draft: Project, op: OpOf<'add_asset'>, ctx: OpContext): OpOutcome {
   const id = op.asset.id ?? ctx.newId('asset');
   if (draft.assets.some((a) => a.id === id)) {

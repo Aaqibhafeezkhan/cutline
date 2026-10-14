@@ -70,6 +70,8 @@ export const ClipView = memo(function ClipView({
   const select = useEditor((s) => s.select);
   const grid = useBeats((s) => ('assetId' in clip ? s.byAsset[clip.assetId] : undefined));
   const highlight = useHighlight(clip.id);
+  // Clips an agent proposal would change, while that proposal is previewed.
+  const proposed = useEditor((s) => s.preview?.affectedIds.includes(clip.id) ?? false);
   const width = Math.max(2, clip.duration * zoom);
   const text = label(clip, assetName);
   const badge = speedBadge(clip);
@@ -88,11 +90,12 @@ export const ClipView = memo(function ClipView({
       aria-pressed={selected}
       aria-label={`${clip.type} clip ${text}, ${clip.start.toFixed(2)} to ${clipEnd(clip).toFixed(2)} seconds${track.locked ? ', locked' : ''}`}
       data-clip-id={clip.id}
+      data-proposed={proposed || undefined}
       className={cn(
         'group absolute top-[3px] overflow-hidden rounded-md text-[11px] text-white/95 shadow-sm outline-offset-1 transition-[box-shadow,opacity]',
         COLORS[clip.type],
         selected && 'ring-2 ring-white',
-        highlight && 'agent-highlight',
+        (highlight || proposed) && 'agent-highlight',
         dragging && 'opacity-40',
         track.locked ? 'cursor-not-allowed' : 'cursor-grab active:cursor-grabbing',
       )}

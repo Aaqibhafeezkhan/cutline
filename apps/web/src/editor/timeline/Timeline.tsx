@@ -400,6 +400,7 @@ export function Timeline() {
                       onBeginDrag={beginDrag}
                     />
                   ))}
+                  <ProposedClips track={track} zoom={zoom} />
                 </div>
               ))}
               {drag?.moved && (
@@ -421,6 +422,31 @@ export function Timeline() {
       </div>
     </section>
   );
+}
+
+/** While an agent proposal is previewed: outlines of the clips it would add or move here. */
+function ProposedClips({ track, zoom }: { track: Track; zoom: number }) {
+  const proposed = useEditor((s) => s.preview?.project.tracks.find((t) => t.id === track.id));
+  if (!proposed) return null;
+  const changed = proposed.clips.filter((c) => {
+    const current = track.clips.find((x) => x.id === c.id);
+    return !current || current.start !== c.start || current.duration !== c.duration;
+  });
+  return changed.map((clip) => (
+    <div
+      key={clip.id}
+      aria-hidden
+      data-proposed-clip={clip.id}
+      className="pointer-events-none absolute top-[3px] truncate rounded-md border-2 border-dashed border-agent bg-agent/15 px-1.5 py-1 text-[11px] font-medium text-agent"
+      style={{
+        left: clip.start * zoom,
+        width: Math.max(2, clip.duration * zoom),
+        height: TRACK_HEIGHT[track.kind] - 6,
+      }}
+    >
+      {'text' in clip ? clip.text : (clip.name ?? 'proposed')}
+    </div>
+  ));
 }
 
 function TimeReadout({ duration }: { duration: number }) {

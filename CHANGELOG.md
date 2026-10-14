@@ -19,10 +19,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `reverse` and `sourceEnd`). The browser engine retimes audio by resampling (pitch follows the
   speed), plays reversed audio backwards and serves reversed video from a cached decode window;
   the ffmpeg renderer uses `setpts`, frame-exact `reverse`/`areverse` on trimmed windows, chained
-  `atempo` and single-frame holds. New MCP tools `set_clip_speed` and `freeze_frame` (41 tools).
+  `atempo` and single-frame holds. New MCP tools `set_clip_speed` and `freeze_frame` (42 tools).
   The editor has a Speed section (0.25×–4× presets, custom value, Reverse, Ripple), a Freeze frame
   button (`F`) and speed/reverse/freeze badges on timeline clips.
-
+- **Suggestion mode for agent edits** ("pull requests for edits"): a per-project Agent
+  _Direct / Suggest_ switch in the top bar (new `set_agent_mode` operation, stored as
+  `settings.agentMode`). In suggest mode every agent edit becomes a proposal with a change
+  summary instead of changing the timeline. The new Review tab lists them; Preview shows the
+  result in the player and outlines proposed clips on the timeline, Accept applies a proposal as
+  one undo step (rebased onto later edits, marked stale if it no longer applies), Reject discards
+  it, and Accept all / Reject all handle the whole queue. Proposals are persisted with the project
+  data and streamed to editors over the WebSocket. Agents are told "proposed as …, waiting for
+  review", can check `list_proposals` (new MCP tool) and see `agentMode` in `get_project`; they
+  cannot change the mode, undo or redo while their edits are under review. Core exports the pure
+  `diffProjects` / `describeChanges` helpers.
 - **Chat with Claude inside the editor**: a collapsible Chat panel (toolbar button or `Ctrl+K`)
   where you can type "Make this a 30-second short" without Claude Desktop. The server runs an agent
   loop with the official Anthropic TypeScript SDK (`@anthropic-ai/sdk`) over the existing MCP tools,
@@ -42,7 +52,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `all`) or by word index range, with `dryRun`. Core exports the pure helpers
   `wordRangesToCuts`, `findPhraseInWords` and `groupParagraphs`; the server adds a
   `POST /api/projects/:id/transcript` route that returns cached (or freshly transcribed) per-asset
-  words. The MCP server now exposes 34 tools.
+  words.
 - **Chapters, markers and highlight reels**: projects can hold markers (`chapter`, `note`,
   `highlight` with an optional end) that follow ripple edits of the whole timeline (`delete_range`,
   and ripple trims/deletes on the main video track). New core operations `add_markers`,
@@ -56,7 +66,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   output size). Server-rendered MP4s embed the chapters. The editor draws chapters as labelled
   flags and highlights as coloured spans on the ruler (click seeks, double-click renames, Del
   removes, `M` adds a note at the playhead) and has a Chapters panel with "Copy for YouTube".
-  `get_project` lists chapters and markers. The MCP server now exposes 39 tools.
+  `get_project` lists chapters and markers.
+- The MCP server now exposes 40 tools (was 33): `delete_words`, `list_proposals`, `get_chapters_input`, `set_chapters`, `export_chapters`, `mark_highlights` and `create_highlight_reel`.
 
 ## [0.3.0] - 2026-10-13
 
