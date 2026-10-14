@@ -1,5 +1,30 @@
 # @cutline/core
 
+## 0.4.0
+
+### Minor Changes
+
+- Clip speed (0.1–16×), reverse playback and freeze frames: the `set_speed` and `freeze_frame`
+  operations, speed-aware resolver output for both renderers, the `set_clip_speed` and
+  `freeze_frame` MCP tools, and a Speed section, Freeze frame button (F) and speed badges in the
+  editor.
+
+- [#30](https://github.com/Aepzie/cutline/pull/30) [`ae2820d`](https://github.com/Aepzie/cutline/commit/ae2820db053aec8cce4a94390f0203beae80c96c) Thanks [@Aepzie](https://github.com/Aepzie)! - Chapters, markers and highlight reels: project markers (chapter, note, highlight) that follow
+  ripple edits, the operations `add_markers`, `update_marker`, `remove_markers`, `set_chapters` and
+  `assemble_ranges`, five MCP tools (`get_chapters_input`, `set_chapters`, `export_chapters`,
+  `mark_highlights`, `create_highlight_reel`), MP4 chapters in server exports, and markers on the
+  editor ruler with a Chapters panel ("Copy for YouTube").
+
+- [#29](https://github.com/Aepzie/cutline/pull/29) [`b1d925e`](https://github.com/Aepzie/cutline/commit/b1d925ebe8bb6ad5f2b2dd0cd79260f3b27ab9ed) Thanks [@Aepzie](https://github.com/Aepzie)! - Suggestion mode for agent edits: a per-project Direct / Suggest switch (`set_agent_mode`
+  operation). In suggest mode agent edits become proposals that the editor previews, accepts (one
+  undo step) or rejects. New `list_proposals` MCP tool, `diffProjects` / `describeChanges` helpers in
+  core, and a Suggestions panel in the editor.
+
+- [#27](https://github.com/Aepzie/cutline/pull/27) [`afde8b3`](https://github.com/Aepzie/cutline/commit/afde8b31ce9aa0cdf960ceaeda8832926697c41f) Thanks [@Aepzie](https://github.com/Aepzie)! - Transcript editing: a Transcript panel in the editor (click a word to seek, select words and press
+  Delete to cut them in one undo step), the `delete_words` MCP tool (remove a spoken phrase or a word
+  index range) and the pure core helpers `wordRangesToCuts`, `findPhraseInWords` and
+  `groupParagraphs`.
+
 ## 0.3.0
 
 ### Minor Changes

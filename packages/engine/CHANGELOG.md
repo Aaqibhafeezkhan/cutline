@@ -1,5 +1,19 @@
 # @cutline/engine
 
+## 0.4.0
+
+### Minor Changes
+
+- Clip speed (0.1–16×), reverse playback and freeze frames: the `set_speed` and `freeze_frame`
+  operations, speed-aware resolver output for both renderers, the `set_clip_speed` and
+  `freeze_frame` MCP tools, and a Speed section, Freeze frame button (F) and speed badges in the
+  editor.
+
+### Patch Changes
+
+- Updated dependencies [[`ae2820d`](https://github.com/Aepzie/cutline/commit/ae2820db053aec8cce4a94390f0203beae80c96c), [`b1d925e`](https://github.com/Aepzie/cutline/commit/b1d925ebe8bb6ad5f2b2dd0cd79260f3b27ab9ed), [`afde8b3`](https://github.com/Aepzie/cutline/commit/afde8b31ce9aa0cdf960ceaeda8832926697c41f)]:
+  - @cutline/core@0.4.0
+
 ## 0.3.0
 
 ### Patch Changes
