@@ -7,7 +7,17 @@ import {
   type DragEvent,
   type PointerEvent,
 } from 'react';
-import { Circle, Magnet, Minus, Plus, Scissors, Square, Trash2, Type } from 'lucide-react';
+import {
+  Circle,
+  Magnet,
+  Minus,
+  Plus,
+  Scissors,
+  Snowflake,
+  Square,
+  Trash2,
+  Type,
+} from 'lucide-react';
 import { clipEnd, projectDuration, type Clip, type Track } from '@cutline/core';
 import { Button } from '@/components/ui/button';
 import { Tooltip } from '@/components/ui/misc';
@@ -16,7 +26,7 @@ import { seek } from '@/lib/player-bridge';
 import { useEditor, usePlayhead } from '@/lib/store';
 import { cn, formatTimecode } from '@/lib/utils';
 import { AddMenu } from '../AddMenu';
-import { addShape, addText, deleteSelection, splitAtPlayhead } from '../commands';
+import { addShape, addText, deleteSelection, freezeAtPlayhead, splitAtPlayhead } from '../commands';
 import { ClipView, type DragKind } from './ClipView';
 import {
   HEADER_WIDTH,
@@ -28,6 +38,7 @@ import {
   snap,
   snapBlock,
   snapPoints,
+  trimLimits,
 } from './geometry';
 import { Ruler } from './Ruler';
 import { TrackHeader } from './TrackHeader';
@@ -159,13 +170,12 @@ export function Timeline() {
       });
     } else if (drag.kind === 'trim-start') {
       let start = snap(c.start + dx, points, threshold).time;
-      const earliest = 'sourceStart' in c ? c.start - c.sourceStart : 0;
+      const [earliest] = trimLimits(c, asset?.duration);
       start = Math.min(Math.max(start, earliest, 0), clipEnd(c) - minDur);
       setDrag({ ...drag, moved, start, duration: clipEnd(c) - start });
     } else {
       let end = snap(clipEnd(c) + dx, points, threshold).time;
-      const latest =
-        'sourceStart' in c && asset?.duration ? c.start + asset.duration - c.sourceStart : Infinity;
+      const [, latest] = trimLimits(c, asset?.duration);
       end = Math.max(Math.min(end, latest), c.start + minDur);
       setDrag({ ...drag, moved, duration: end - c.start });
     }
@@ -231,6 +241,16 @@ export function Timeline() {
             onClick={() => void splitAtPlayhead()}
           >
             <Scissors />
+          </Button>
+        </Tooltip>
+        <Tooltip content="Freeze frame at playhead (F)">
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Freeze frame at playhead"
+            onClick={() => void freezeAtPlayhead()}
+          >
+            <Snowflake />
           </Button>
         </Tooltip>
         <Tooltip content="Delete selection (Del, Shift+Del to ripple)">

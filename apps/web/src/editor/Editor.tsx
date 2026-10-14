@@ -8,7 +8,14 @@ import { isTypingTarget } from '@/lib/utils';
 import { ActivityFeed } from './ActivityFeed';
 import { AssetBin } from './AssetBin';
 import { CaptionsPanel } from './CaptionsPanel';
-import { addText, deleteSelection, nudgeSelection, selectAll, splitAtPlayhead } from './commands';
+import {
+  addText,
+  deleteSelection,
+  freezeAtPlayhead,
+  nudgeSelection,
+  selectAll,
+  splitAtPlayhead,
+} from './commands';
 import { BrandKitDialog } from './BrandKitDialog';
 import { ConnectDialog } from './ConnectDialog';
 import { ExportDialog } from './ExportDialog';
@@ -35,6 +42,7 @@ function useShortcuts(openHelp: () => void) {
       else if (e.key === ' ') togglePlay();
       else if (key === 's' && !mod) void splitAtPlayhead();
       else if (key === 't' && !mod) void addText();
+      else if (key === 'f' && !mod) void freezeAtPlayhead();
       else if (e.key === 'Delete' || e.key === 'Backspace') void deleteSelection(e.shiftKey);
       else if (e.key === 'ArrowLeft' && e.altKey) void nudgeSelection(-frame);
       else if (e.key === 'ArrowRight' && e.altKey) void nudgeSelection(frame);

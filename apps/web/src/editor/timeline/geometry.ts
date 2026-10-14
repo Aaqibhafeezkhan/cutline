@@ -1,4 +1,12 @@
-import { clipEnd, type Clip, type Project, type Track } from '@cutline/core';
+import {
+  clipEnd,
+  clipSpeed,
+  isReversed,
+  sourceSpan,
+  type Clip,
+  type Project,
+  type Track,
+} from '@cutline/core';
 
 export const TRACK_HEIGHT: Record<Track['kind'], number> = { video: 52, audio: 44, caption: 34 };
 export const RULER_HEIGHT = 26;
@@ -34,13 +42,36 @@ export function snapPoints(
   return [...points];
 }
 
-/** Timeline times of the beats (source time per asset) that fall inside a clip. */
+/** Timeline times of the beats (source time per asset) that fall inside a clip (speed-aware). */
 export function beatTimes(clip: Clip, grid: readonly number[] | undefined): number[] {
   if (!grid || !('sourceStart' in clip)) return [];
-  const end = clip.sourceStart + clip.duration;
+  const speed = clipSpeed(clip);
+  if (speed === 0) return [];
+  const end = clip.sourceStart + sourceSpan(clip);
   return grid
     .filter((b) => b >= clip.sourceStart && b < end)
-    .map((b) => clip.start + b - clip.sourceStart);
+    .map((b) => {
+      const local = (b - clip.sourceStart) / speed;
+      return clip.start + (isReversed(clip) ? clip.duration - local : local);
+    })
+    .sort((a, b) => a - b);
+}
+
+/**
+ * How far a media clip's edges can be dragged before running out of source:
+ * [earliest start, latest end] in timeline seconds (unbounded for freeze frames).
+ */
+export function trimLimits(clip: Clip, assetDuration: number | null | undefined): [number, number] {
+  if (!('sourceStart' in clip)) return [0, Infinity];
+  const speed = clipSpeed(clip);
+  if (speed === 0) return [0, Infinity];
+  const before = clip.sourceStart / speed;
+  const after = assetDuration
+    ? (assetDuration - clip.sourceStart - sourceSpan(clip)) / speed
+    : Infinity;
+  return isReversed(clip)
+    ? [clip.start - after, clipEnd(clip) + before]
+    : [clip.start - before, clipEnd(clip) + after];
 }
 
 /** Beat snap targets of every clip with a known beat grid, except `excludeIds`. */

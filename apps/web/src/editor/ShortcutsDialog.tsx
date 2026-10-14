@@ -5,6 +5,7 @@ export const SHORTCUTS: Array<[string[], string]> = [
   [['Space'], 'Play / pause'],
   [['S'], 'Split at playhead (selected clips, or all under the playhead)'],
   [['T'], 'Add text at the playhead'],
+  [['F'], 'Freeze frame: hold the video frame at the playhead for 2 s'],
   [['Del'], 'Delete selected clips'],
   [['Shift', 'Del'], 'Ripple delete (close the gap)'],
   [['Ctrl', 'Z'], 'Undo (works on agent changes too)'],
