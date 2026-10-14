@@ -18,6 +18,7 @@ import { ShortcutsDialog } from './ShortcutsDialog';
 import { SuggestionsPanel } from './SuggestionsPanel';
 import { Timeline } from './timeline/Timeline';
 import { TopBar } from './TopBar';
+import { TranscriptPanel } from './TranscriptPanel';
 
 function useShortcuts(openHelp: () => void) {
   useEffect(() => {
@@ -106,12 +107,17 @@ export function Editor({ projectId }: { projectId: string }) {
         </main>
         <aside className="flex min-h-0 flex-col border-l border-border bg-surface">
           <Tabs value={tab} onValueChange={setTab} className="flex min-h-0 flex-1 flex-col">
-            <TabsList className="gap-0 px-1 [&>button]:px-1.5">
+            <TabsList className="gap-0 overflow-x-auto px-1 [&>button]:shrink-0 [&>button]:px-1.5">
               <TabsTrigger value="properties">Properties</TabsTrigger>
+              <TabsTrigger value="transcript">Transcript</TabsTrigger>
               <TabsTrigger value="captions">Captions</TabsTrigger>
               <TabsTrigger value="activity">Activity</TabsTrigger>
-              <TabsTrigger value="suggestions" className="flex items-center gap-1">
-                Suggestions
+              <TabsTrigger
+                value="suggestions"
+                title="Agent suggestions waiting for review"
+                className="flex items-center gap-1"
+              >
+                Review
                 {pending > 0 && (
                   <span
                     aria-label={`${pending} pending`}
@@ -124,6 +130,9 @@ export function Editor({ projectId }: { projectId: string }) {
             </TabsList>
             <TabsContent value="properties" className="min-h-0 flex-1 overflow-y-auto">
               <Properties />
+            </TabsContent>
+            <TabsContent value="transcript" className="min-h-0 flex-1">
+              <TranscriptPanel />
             </TabsContent>
             <TabsContent value="captions" className="min-h-0 flex-1">
               <CaptionsPanel />

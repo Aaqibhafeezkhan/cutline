@@ -12,14 +12,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Suggestion mode for agent edits** ("pull requests for edits"): a per-project Agent
   _Direct / Suggest_ switch in the top bar (new `set_agent_mode` operation, stored as
   `settings.agentMode`). In suggest mode every agent edit becomes a proposal with a change
-  summary instead of changing the timeline. The new Suggestions tab lists them; Preview shows the
+  summary instead of changing the timeline. The new Review tab lists them; Preview shows the
   result in the player and outlines proposed clips on the timeline, Accept applies a proposal as
   one undo step (rebased onto later edits, marked stale if it no longer applies), Reject discards
   it, and Accept all / Reject all handle the whole queue. Proposals are persisted with the project
   data and streamed to editors over the WebSocket. Agents are told "proposed as …, waiting for
-  review", can check `list_proposals` (new MCP tool, 34 in total) and see `agentMode` in
-  `get_project`; they cannot change the mode, undo or redo while their edits are under review.
-  Core exports the pure `diffProjects` / `describeChanges` helpers.
+  review", can check `list_proposals` (new MCP tool) and see `agentMode` in `get_project`; they
+  cannot change the mode, undo or redo while their edits are under review. Core exports the pure
+  `diffProjects` / `describeChanges` helpers.
+- **Transcript editing**: edit the video by editing its transcript. The editor's new Transcript
+  panel shows the timeline's words as text (paragraphs at pauses), highlights the word being
+  spoken and seeks on click. Select words (drag, Shift+click or Shift+arrow keys) and press
+  Delete/Backspace to cut exactly those words out of all unlocked tracks with one ripple
+  `delete_range` (one undo step); the right-click menu also offers "Remove fillers". The new MCP
+  tool `delete_words` does the same for agents, by exact phrase (`text`, with `occurrence` or
+  `all`) or by word index range, with `dryRun`. Core exports the pure helpers
+  `wordRangesToCuts`, `findPhraseInWords` and `groupParagraphs`; the server adds a
+  `POST /api/projects/:id/transcript` route that returns cached (or freshly transcribed) per-asset
+  words.
+- The MCP server now exposes 35 tools (was 33): `delete_words` and `list_proposals`.
 
 ## [0.3.0] - 2026-10-13
 
