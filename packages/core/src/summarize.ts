@@ -1,3 +1,4 @@
+import { clipSpeed, isFreeze, isReversed, sourceSpan } from './clipmath';
 import { projectDuration } from './queries';
 import type { Clip, Project } from './schema';
 import { clipEnd } from './schema';
@@ -12,6 +13,12 @@ export interface ClipSummary {
   end: number;
   asset?: string;
   source?: [number, number];
+  /** Playback speed when not 1 (timeline duration = source span / speed). */
+  speed?: number;
+  /** The source window plays backwards. */
+  reverse?: boolean;
+  /** Freeze frame: holds the frame at source[0], silent. */
+  freeze?: boolean;
   text?: string;
   shape?: string;
   volume?: number;
@@ -34,7 +41,12 @@ function summarizeClip(clip: Clip, assetNames: Map<string, string>): ClipSummary
   };
   if ('assetId' in clip) s.asset = `${clip.assetId} (${assetNames.get(clip.assetId) ?? '?'})`;
   if (clip.type === 'video' || clip.type === 'audio') {
-    s.source = [r3(clip.sourceStart), r3(clip.sourceStart + clip.duration)];
+    s.source = [r3(clip.sourceStart), r3(clip.sourceStart + sourceSpan(clip))];
+    if (isFreeze(clip)) s.freeze = true;
+    else {
+      if (clipSpeed(clip) !== 1) s.speed = clipSpeed(clip);
+      if (isReversed(clip)) s.reverse = true;
+    }
     if (clip.volume !== 1) s.volume = clip.volume;
     if (clip.muted) s.muted = true;
     if (clip.duck) s.ducked = `${clip.duck.amountDb} dB in ${clip.duck.ranges.length} range(s)`;

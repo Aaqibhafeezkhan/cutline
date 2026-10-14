@@ -1,5 +1,6 @@
+import { sourceRangeToLocal } from './clipmath';
 import { mergeRanges, type TimeRange } from './ranges';
-import { gainAt, resolveAudioSegments, type AudioSegment } from './resolve';
+import { gainAt, resolveAudioSegments, segmentSourceTime, type AudioSegment } from './resolve';
 import type { Project } from './schema';
 import { clipEnd } from './schema';
 import { roundTime } from './time';
@@ -112,7 +113,7 @@ function addSegment(energy: number[], seg: AudioSegment, env: Envelope, windowSe
   for (let i = first; i < last && i < energy.length; i++) {
     const t = (i + 0.5) * windowSec;
     if (t < seg.timelineStart || t >= seg.timelineEnd) continue;
-    const amp = envelopeAt(env, seg.sourceStart + (t - seg.timelineStart)) * gainAt(seg.gain, t);
+    const amp = envelopeAt(env, segmentSourceTime(seg, t)) * gainAt(seg.gain, t);
     energy[i]! += amp * amp;
   }
 }
@@ -187,13 +188,12 @@ export function mapSourceRangeToTimeline(
   for (const track of project.tracks) {
     for (const clip of track.clips) {
       if ((clip.type !== 'video' && clip.type !== 'audio') || clip.assetId !== assetId) continue;
-      const s = Math.max(range.start, clip.sourceStart);
-      const e = Math.min(range.end, clip.sourceStart + clip.duration);
-      if (e - s <= 1e-6) continue;
+      const local = sourceRangeToLocal(clip, range.start, range.end);
+      if (!local) continue;
       out.push({
         clipId: clip.id,
-        start: roundTime(clip.start + (s - clip.sourceStart)),
-        end: roundTime(clip.start + (e - clip.sourceStart)),
+        start: roundTime(clip.start + local[0]),
+        end: roundTime(clip.start + local[1]),
       });
     }
   }

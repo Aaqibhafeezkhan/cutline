@@ -1,3 +1,4 @@
+import { isFreeze, sourceSpan } from './clipmath';
 import { CutlineError } from './errors';
 import type { Project } from './schema';
 import { ProjectSchema, TRACK_ACCEPTS, clipEnd, hasSource } from './schema';
@@ -62,9 +63,13 @@ export function findProblems(project: Project): string[] {
         } else if (hasSource(clip)) {
           if (asset.duration === null) {
             problems.push(`clip ${clip.id}: asset ${asset.id} has no duration`);
-          } else if (clip.sourceStart + clip.duration > asset.duration + SOURCE_TOLERANCE) {
+          } else if (clip.sourceStart + sourceSpan(clip) > asset.duration + SOURCE_TOLERANCE) {
             problems.push(
-              `clip ${clip.id}: source range ${formatRange(clip.sourceStart, clip.sourceStart + clip.duration)} exceeds asset duration ${asset.duration}s`,
+              `clip ${clip.id}: source range ${formatRange(clip.sourceStart, clip.sourceStart + sourceSpan(clip))} exceeds asset duration ${asset.duration}s`,
+            );
+          } else if (isFreeze(clip) && clip.sourceStart >= asset.duration) {
+            problems.push(
+              `clip ${clip.id}: freeze frame at ${clip.sourceStart}s is not inside asset (${asset.duration}s)`,
             );
           }
           if (clip.type === 'audio' && !asset.hasAudio) {

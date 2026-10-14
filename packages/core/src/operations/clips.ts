@@ -1,4 +1,4 @@
-import { assertSourceRange, cloneClip, sliceClip, splitClip } from '../clipmath';
+import { assertSourceRange, cloneClip, sliceClip, sourceSpan, splitClip } from '../clipmath';
 import { CutlineError } from '../errors';
 import type { OpContext } from '../ids';
 import {
@@ -156,11 +156,11 @@ export function trimClip(draft: Project, op: OpOf<'trim_clip'>): OpOutcome {
   }
   const from = newStart - clip.start;
   const to = newEnd - clip.start;
-  if (hasSource(clip)) {
-    const asset = draft.assets.find((a) => a.id === clip.assetId);
-    assertSourceRange(clip, asset, clip.sourceStart + from, to - from);
-  }
   const trimmed = sliceClip(clip, from, to);
+  if (hasSource(trimmed)) {
+    const asset = draft.assets.find((a) => a.id === trimmed.assetId);
+    assertSourceRange(clip, asset, trimmed.sourceStart, sourceSpan(trimmed));
+  }
   const log = emptyLog();
   log.modified.push(clip.id);
   if (op.ripple) {
