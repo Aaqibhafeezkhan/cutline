@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Suggestion mode for agent edits** ("pull requests for edits"): a per-project Agent
+  _Direct / Suggest_ switch in the top bar (new `set_agent_mode` operation, stored as
+  `settings.agentMode`). In suggest mode every agent edit becomes a proposal with a change
+  summary instead of changing the timeline. The new Suggestions tab lists them; Preview shows the
+  result in the player and outlines proposed clips on the timeline, Accept applies a proposal as
+  one undo step (rebased onto later edits, marked stale if it no longer applies), Reject discards
+  it, and Accept all / Reject all handle the whole queue. Proposals are persisted with the project
+  data and streamed to editors over the WebSocket. Agents are told "proposed as …, waiting for
+  review", can check `list_proposals` (new MCP tool, 34 in total) and see `agentMode` in
+  `get_project`; they cannot change the mode, undo or redo while their edits are under review.
+  Core exports the pure `diffProjects` / `describeChanges` helpers.
+
 ## [0.3.0] - 2026-10-13
 
 Audio and branding: remove filler words, detect beats and cut on the beat, duck music under

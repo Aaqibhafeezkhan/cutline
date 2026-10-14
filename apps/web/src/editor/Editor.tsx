@@ -15,6 +15,7 @@ import { ExportDialog } from './ExportDialog';
 import { Preview } from './Preview';
 import { Properties } from './Properties';
 import { ShortcutsDialog } from './ShortcutsDialog';
+import { SuggestionsPanel } from './SuggestionsPanel';
 import { Timeline } from './timeline/Timeline';
 import { TopBar } from './TopBar';
 
@@ -61,6 +62,8 @@ export function Editor({ projectId }: { projectId: string }) {
   const [connectOpen, setConnectOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [brandOpen, setBrandOpen] = useState(false);
+  const [tab, setTab] = useState('properties');
+  const pending = useEditor((s) => s.proposals.length);
 
   useEffect(() => {
     useEditor.getState().open(projectId);
@@ -92,6 +95,7 @@ export function Editor({ projectId }: { projectId: string }) {
         onConnect={() => setConnectOpen(true)}
         onShortcuts={() => setHelpOpen(true)}
         onBrand={() => setBrandOpen(true)}
+        onSuggestions={() => setTab('suggestions')}
       />
       <div className="grid min-h-0 grid-cols-[260px_minmax(0,1fr)_300px]">
         <aside className="min-h-0 border-r border-border bg-surface">
@@ -101,11 +105,22 @@ export function Editor({ projectId }: { projectId: string }) {
           <Preview />
         </main>
         <aside className="flex min-h-0 flex-col border-l border-border bg-surface">
-          <Tabs defaultValue="properties" className="flex min-h-0 flex-1 flex-col">
-            <TabsList>
+          <Tabs value={tab} onValueChange={setTab} className="flex min-h-0 flex-1 flex-col">
+            <TabsList className="gap-0 px-1 [&>button]:px-1.5">
               <TabsTrigger value="properties">Properties</TabsTrigger>
               <TabsTrigger value="captions">Captions</TabsTrigger>
               <TabsTrigger value="activity">Activity</TabsTrigger>
+              <TabsTrigger value="suggestions" className="flex items-center gap-1">
+                Suggestions
+                {pending > 0 && (
+                  <span
+                    aria-label={`${pending} pending`}
+                    className="rounded-full bg-agent px-1.5 text-[10px] font-semibold leading-4 text-background"
+                  >
+                    {pending}
+                  </span>
+                )}
+              </TabsTrigger>
             </TabsList>
             <TabsContent value="properties" className="min-h-0 flex-1 overflow-y-auto">
               <Properties />
@@ -115,6 +130,9 @@ export function Editor({ projectId }: { projectId: string }) {
             </TabsContent>
             <TabsContent value="activity" className="flex min-h-0 flex-1 flex-col">
               <ActivityFeed />
+            </TabsContent>
+            <TabsContent value="suggestions" className="flex min-h-0 flex-1 flex-col">
+              <SuggestionsPanel />
             </TabsContent>
           </Tabs>
         </aside>

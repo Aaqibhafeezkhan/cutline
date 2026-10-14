@@ -2,6 +2,7 @@ import {
   ArrowLeft,
   Bot,
   Download,
+  Inbox,
   Keyboard,
   Palette,
   Plug,
@@ -9,6 +10,7 @@ import {
   Undo2,
   User,
 } from 'lucide-react';
+import { agentModeOf, type AgentMode } from '@cutline/core';
 import { Button } from '@/components/ui/button';
 import { Tooltip } from '@/components/ui/misc';
 import { navigate } from '@/lib/router';
@@ -33,16 +35,83 @@ function BrandSwatches() {
   );
 }
 
+/**
+ * Direct / Suggest switch for agent edits, plus the number of suggestions
+ * waiting for review (opens the Suggestions tab).
+ */
+function AgentModeToggle({ onSuggestions }: { onSuggestions: () => void }) {
+  const mode = useEditor((s) => (s.project ? agentModeOf(s.project) : 'direct'));
+  const pending = useEditor((s) => s.proposals.length);
+  const setAgentMode = useEditor((s) => s.setAgentMode);
+  const options: Array<{ value: AgentMode; label: string; tip: string }> = [
+    { value: 'direct', label: 'Direct', tip: 'Agent edits apply immediately (and can be undone).' },
+    {
+      value: 'suggest',
+      label: 'Suggest',
+      tip: 'Agent edits become suggestions you preview and accept or reject.',
+    },
+  ];
+  return (
+    <div className="flex items-center gap-1">
+      <div
+        role="radiogroup"
+        aria-label="Agent edits"
+        className="flex items-center rounded-md border border-border p-0.5 text-xs"
+      >
+        <span className="flex items-center gap-1 px-1.5 text-muted">
+          <Bot className="size-3.5" aria-hidden /> Agent
+        </span>
+        {options.map((o) => (
+          <Tooltip key={o.value} content={o.tip}>
+            <button
+              type="button"
+              role="radio"
+              aria-checked={mode === o.value}
+              className={cn(
+                'rounded px-2 py-0.5 font-medium transition-colors',
+                mode === o.value
+                  ? o.value === 'suggest'
+                    ? 'bg-agent text-background'
+                    : 'bg-surface-2 text-foreground'
+                  : 'text-muted hover:text-foreground',
+              )}
+              onClick={() => mode !== o.value && void setAgentMode(o.value)}
+            >
+              {o.label}
+            </button>
+          </Tooltip>
+        ))}
+      </div>
+      {pending > 0 && (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="text-agent"
+          onClick={onSuggestions}
+          aria-label={`${pending} suggestion${pending === 1 ? '' : 's'} to review`}
+        >
+          <Inbox />
+          <span className="rounded-full bg-agent px-1.5 text-[10px] font-semibold leading-4 text-background">
+            {pending}
+          </span>
+        </Button>
+      )}
+    </div>
+  );
+}
+
 export function TopBar({
   onExport,
   onConnect,
   onShortcuts,
   onBrand,
+  onSuggestions,
 }: {
   onExport: () => void;
   onConnect: () => void;
   onShortcuts: () => void;
   onBrand: () => void;
+  onSuggestions: () => void;
 }) {
   const project = useEditor((s) => s.project);
   const history = useEditor((s) => s.history);
@@ -105,6 +174,7 @@ export function TopBar({
       </div>
 
       <div className="ml-auto flex items-center gap-2">
+        <AgentModeToggle onSuggestions={onSuggestions} />
         <div className="flex items-center gap-1" aria-label="Connected participants">
           {agents.length === 0 ? (
             <Tooltip content="No AI agent has used this project yet. Click Connect agent for setup instructions.">

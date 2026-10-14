@@ -100,6 +100,43 @@ The browser never mutates the document locally; drags show a transient ghost
 and commit an operation on drop. On localhost the round trip is ~1 ms. If a
 client sees a version gap it requests a fresh snapshot.
 
+### Suggestion mode (proposals)
+
+`settings.agentMode` (`"direct"` by default, changed only through the `set_agent_mode`
+operation) decides what happens to agent edits. In `"suggest"` mode
+`DocumentService.apply` does not commit an agent's operations: it dry-runs them on the current
+project and stores a **proposal** instead — the parsed operations, the ids generated during the
+dry run, the base version, the author, a `diffProjects` change list and a label (tool name +
+summary, taken from an `AsyncLocalStorage` scope the MCP server opens around every tool call).
+The tool result tells the agent the edit is waiting for review; nothing is broadcast as a patch.
+
+```mermaid
+sequenceDiagram
+  participant C as Claude (MCP)
+  participant S as Server
+  participant B as Browser
+  C->>S: tools/call split_clip
+  S->>S: dry run → proposal (persisted)
+  S-->>B: proposals [...]
+  S-->>C: "Proposed as prop_…, waiting for review"
+  B->>B: Preview: apply ops to a local copy → player.setProject(copy)
+  B->>S: proposal {action: accept, proposalId}
+  S->>S: applyOperations (replayed ids) → ONE history entry
+  S-->>B: patch {origin: agent} + proposals [...]
+```
+
+- **Accept** re-applies the operations to the _current_ project (intent-based ops rebase
+  naturally) with a context that replays the recorded ids, so ids the agent was told about stay
+  valid. It is one history entry, attributed to the agent. If the operations no longer apply, the
+  proposal is marked `stale` with the `CutlineError` and kept until the user rejects it.
+- **Reject** discards it; accept/reject without an id handles all pending proposals.
+- Proposals live server-side per project (`<dataDir>/proposals/<projectId>.json`) and are sent to
+  editors as a `proposals` WebSocket message on subscribe and on every change.
+- Enforcement is server-side: agent batches containing `set_agent_mode` are refused
+  (`FORBIDDEN`) in any mode, `update_project` cannot touch `agentMode`, and agents cannot
+  undo/redo while their edits are under review. Batches that only import media (`add_asset`) are
+  applied directly, since they only fill the asset bin and later proposals need the asset ids.
+
 ### 4. Rendering
 
 The pure resolver in core (`resolveFrame(project, t)`, `resolveAudioSegments`)

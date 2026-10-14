@@ -124,6 +124,17 @@ export class SyncClient {
     return this.request({ type: 'redo', requestId: `r${++this.seq}`, projectId: this.projectId! });
   }
 
+  /** Accepts or rejects an agent proposal (all of them without `proposalId`). */
+  proposal(action: 'accept' | 'reject', proposalId?: string): Promise<AckMessage> {
+    return this.request({
+      type: 'proposal',
+      requestId: `r${++this.seq}`,
+      projectId: this.projectId!,
+      action,
+      proposalId,
+    });
+  }
+
   close(): void {
     this.closed = true;
     this.ws?.close();
