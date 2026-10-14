@@ -200,6 +200,32 @@ describe.runIf(hasFfmpeg && hasFixtures)('MCP over Streamable HTTP + live sync',
         (m) => m.type === 'activity' && m.tool === 'remove_filler_words' && m.status === 'finished',
       ),
     ).toBe(true);
+
+    // The editor's transcript panel: per-asset words, cached-only unless transcribe=true.
+    type Sources = {
+      byAsset: Record<string, Array<{ text: string }>>;
+      missing: string[];
+      words: Array<{ text: string; start: number }>;
+    };
+    const transcript = async (body: Record<string, unknown>) => {
+      const res = await fetch(`${server.url}/api/projects/${projectId}/transcript`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      expect(res.status).toBe(200);
+      return (await res.json()) as Sources;
+    };
+    const full = await transcript({ transcribe: true });
+    expect(full.missing).toEqual([]);
+    expect(full.words.length).toBeGreaterThan(0);
+    expect(Object.keys(full.byAsset).length).toBeGreaterThan(0);
+    expect(await transcript({})).toEqual(full);
+    expect(
+      messages.some(
+        (m) => m.type === 'activity' && m.tool === 'get_transcript' && m.status === 'finished',
+      ),
+    ).toBe(true);
     ws.close();
   }, 120_000);
 });

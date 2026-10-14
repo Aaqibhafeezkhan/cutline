@@ -13,7 +13,7 @@
   <a href="https://github.com/Aepzie/cutline/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/Aepzie/cutline/actions/workflows/ci.yml/badge.svg"></a>
   <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
   <img alt="TypeScript strict" src="https://img.shields.io/badge/TypeScript-strict-3178c6.svg">
-  <img alt="MCP" src="https://img.shields.io/badge/MCP-33%20tools-8a63d2.svg">
+  <img alt="MCP" src="https://img.shields.io/badge/MCP-36%20tools-8a63d2.svg">
 </p>
 
 > 🎬 _Demo GIF placeholder: Claude removes silences and adds captions while the timeline updates live. (Contributions welcome: record one with `pnpm --filter @cutline/mcp-server demo`.)_
@@ -45,6 +45,12 @@ the mouse, an agent can do with a tool call (and vice versa).
   use them automatically, and one click places the logo in a corner for the whole video
 - Captions editor, properties panel, asset bin with drag-and-drop upload
 - One-click filler-word removal ("um", "uh", "äh", …) from the speech transcript, as one undo step
+- **Transcript editing**: edit the video like a text document. The transcript panel shows the
+  spoken words (current word highlighted, click to jump); select words and press Delete to cut
+  them out of video and audio in one undo step
+- **Speed, reverse and freeze frames**: slow motion or fast forward (0.1–16×, presets in the
+  properties panel), play clips backwards, and hold the frame at the playhead (F) — in the preview,
+  the browser export and the server render alike
 - Audio auto-ducking (music under speech) and loudness normalization (-14 LUFS) in one click
 - **Live agent view**: agent edits pulse on the timeline, an activity feed shows what happened
   (also to editors that join later), presence shows which agent is connected
@@ -53,10 +59,11 @@ the mouse, an agent can do with a tool call (and vice versa).
 - Shared undo/redo: undo the agent's change, or let the agent undo yours
 - Export in the browser (WebCodecs in a Web Worker, MP4 H.264/AAC) or on the server (ffmpeg)
 
-**MCP server (33 tools)**
+**MCP server (36 tools)**
 
 - **Editing:** `create_project`, `get_project`, `add_asset`, `add_clip`, `split_clip`, `trim_clip`,
-  `move_clip`, `delete_clip`, `delete_range`, `remove_filler_words`, `set_clip_property`,
+  `move_clip`, `delete_clip`, `delete_range`, `remove_filler_words`, `delete_words`,
+  `set_clip_property`, `set_clip_speed`, `freeze_frame`,
   `animate_clip`,
   `add_text_overlay`, `add_shape`, `add_template`, `set_brand_kit`, `add_captions`, `add_transition`,
   `set_audio_volume`, `apply_operations`, `undo`, `redo`
@@ -121,6 +128,32 @@ the edits), or starts one itself. Then ask something like:
 More options (tokens, Docker, other clients) are in
 [docs/connect-claude.md](docs/connect-claude.md). No agent at hand? Run the scripted demo agent:
 `pnpm --filter @cutline/mcp-server demo -- /absolute/path/to/video-with-speech.mp4`.
+
+## Chat in the editor
+
+You can also talk to Claude without any MCP client: click **Chat** in the editor's toolbar (or
+press `Ctrl+K`) and type something like "Make this a 30-second short". The Cutline server runs the
+conversation with the [Anthropic API](https://docs.claude.com/) and the same tools Claude Desktop
+gets, scoped to the open project. Edits appear live on the timeline (highlighted as agent changes),
+tool calls show up as chips in the chat, **Stop** cancels a reply, and `Ctrl+Z` undoes anything
+Claude did.
+
+Setup: put your Anthropic API key into the **server** environment, e.g. in `.env` at the repository
+root, and restart the server:
+
+```bash
+ANTHROPIC_API_KEY=sk-ant-...
+# optional
+CUTLINE_CHAT_MODEL=claude-opus-5-5   # default
+CUTLINE_CHAT_EFFORT=medium           # low | medium | high | xhigh | max | default
+```
+
+The key is read only by the server; it is never sent to the browser, logged or written to project
+files. Without it the chat panel stays visible but explains how to enable it. Usage is billed to
+your Anthropic account. Conversations live in server memory (one per project; "New chat" starts
+over) and each message may run at most 20 tool calls. The chat endpoint
+(`POST /api/projects/:id/chat`, server-sent events) uses the same Host/Origin/token checks as the
+rest of the API.
 
 ## How it works
 
@@ -224,7 +257,11 @@ Cutline is a v0.1. Things to know:
   these as warnings).
 - **History is in memory:** undo/redo resets when the server restarts; documents themselves are
   persisted to disk.
-- **No speed changes, nested sequences, color grading or multi-user permissions yet.**
+- **Speed is constant per clip** (no speed ramps). Sped-up/slowed audio changes pitch in the
+  browser preview and browser export (resampling); server renders keep the pitch (`atempo`).
+  Reversed clips decode backwards in half-second windows in the browser, which costs more CPU than
+  forward playback; the server renderer buffers the reversed part of each clip in memory.
+- **No nested sequences, color grading or multi-user permissions yet.**
 - **Transcription quality** depends on the Whisper model (`CUTLINE_WHISPER_MODEL`); the default
   `whisper-base` is fast but not perfect, especially for names.
 - **Security:** designed for local use. It binds to `127.0.0.1` by default. Read

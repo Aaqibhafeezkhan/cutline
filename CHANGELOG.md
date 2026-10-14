@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Clip speed, reverse and freeze frames**: video and audio clips get `speed` (0.1–16, constant;
+  timeline duration = source span / speed) and `reverse`; video clips can be freeze frames
+  (`freeze: true`, a silent hold of the frame at `sourceStart`). New operations `set_speed`
+  (`keepDuration`, `ripple`) and `freeze_frame` (splits the clip at a time and inserts a hold,
+  rippling the track); `set_clip_props` accepts `speed`/`reverse`. Splits, trims, validation,
+  summaries, transcript/beat/scene mappings and the resolver follow the speed (`resolveFrame`
+  maps source times, reversed clips run backwards; `resolveAudioSegments` now carries `speed`,
+  `reverse` and `sourceEnd`). The browser engine retimes audio by resampling (pitch follows the
+  speed), plays reversed audio backwards and serves reversed video from a cached decode window;
+  the ffmpeg renderer uses `setpts`, frame-exact `reverse`/`areverse` on trimmed windows, chained
+  `atempo` and single-frame holds. New MCP tools `set_clip_speed` and `freeze_frame` (36 tools).
+  The editor has a Speed section (0.25×–4× presets, custom value, Reverse, Ripple), a Freeze frame
+  button (`F`) and speed/reverse/freeze badges on timeline clips.
+
+- **Chat with Claude inside the editor**: a collapsible Chat panel (toolbar button or `Ctrl+K`)
+  where you can type "Make this a 30-second short" without Claude Desktop. The server runs an agent
+  loop with the official Anthropic TypeScript SDK (`@anthropic-ai/sdk`) over the existing MCP tools,
+  called in-process and scoped to the open project, so every edit is a normal operation: it shows up
+  live with the agent highlight and `Ctrl+Z` undoes it. Replies stream over
+  `POST /api/projects/:id/chat` (server-sent events) with text, tool-call chips, errors, a Stop
+  button and "New chat"; `get_frames` images are passed to the model so it can look at the video.
+  At most 20 tool calls per message. Enable it by setting `ANTHROPIC_API_KEY` in the server
+  environment (it never reaches the browser); `CUTLINE_CHAT_MODEL` (default `claude-opus-5-5`) and
+  `CUTLINE_CHAT_EFFORT` (default `medium`) tune it. Without a key the panel explains how to enable it.
+- **Transcript editing**: edit the video by editing its transcript. The editor's new Transcript
+  panel shows the timeline's words as text (paragraphs at pauses), highlights the word being
+  spoken and seeks on click. Select words (drag, Shift+click or Shift+arrow keys) and press
+  Delete/Backspace to cut exactly those words out of all unlocked tracks with one ripple
+  `delete_range` (one undo step); the right-click menu also offers "Remove fillers". The new MCP
+  tool `delete_words` does the same for agents, by exact phrase (`text`, with `occurrence` or
+  `all`) or by word index range, with `dryRun`. Core exports the pure helpers
+  `wordRangesToCuts`, `findPhraseInWords` and `groupParagraphs`; the server adds a
+  `POST /api/projects/:id/transcript` route that returns cached (or freshly transcribed) per-asset
+  words. The MCP server now exposes 34 tools.
+
 ## [0.3.0] - 2026-10-13
 
 Audio and branding: remove filler words, detect beats and cut on the beat, duck music under
