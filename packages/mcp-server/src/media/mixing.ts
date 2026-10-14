@@ -8,6 +8,7 @@ import {
   mapWordsToTimeline,
   projectDuration,
   round3,
+  sourceSpan,
   timelineEnvelope,
   type Project,
   type TimeRange,
@@ -311,7 +312,7 @@ export async function planLoudness(
       });
       continue;
     }
-    const duration = Math.min(clip.duration, asset.duration - clip.sourceStart);
+    const duration = Math.min(sourceSpan(clip), asset.duration - clip.sourceStart);
     const m = await services.analysis.loudness(asset, clip.sourceStart, duration, signal);
     if (m.integrated <= -69) {
       clips.push({

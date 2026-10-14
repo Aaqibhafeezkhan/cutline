@@ -3,8 +3,13 @@ import {
   animationAt,
   animationSampleTimes,
   clipEnd,
+  clipSpeed,
+  isFreeze,
+  isReversed,
   previousAdjacent,
   resolveAudioSegments,
+  segmentSourceTime,
+  sourceTimeAt,
   type AnimationContribution,
   type Asset,
   type FrameSize,
@@ -12,6 +17,7 @@ import {
   type Project,
   type TextClip,
   type Track,
+  type VideoClip,
   type VisualClip,
 } from '@cutline/core';
 import { add, isConstant, keyframePoints, multiply, num, piecewise, type Point } from './expr';
@@ -172,6 +178,89 @@ function centerExpr(
     : `(${num(half)}+${num(s)}*(${piecewise(pts)}))`;
 }
 
+/**
+ * Seek position whose first decoded frame is the one containing source time
+ * `t` (browser lookup semantics): half a frame before that frame's start.
+ */
+function frameSeek(t: number, fps: number | null): number {
+  return fps ? Math.max(0, (Math.floor(t * fps + 1e-6) - 0.5) / fps) : t;
+}
+
+/**
+ * atempo factors whose product is `speed`, each inside 0.5–2 (the range all
+ * ffmpeg versions accept): 4 → [2, 2], 0.25 → [0.5, 0.5].
+ */
+export function atempoChain(speed: number): number[] {
+  const out: number[] = [];
+  let rest = speed;
+  while (rest > 2 + 1e-9) {
+    out.push(2);
+    rest /= 2;
+  }
+  while (rest < 0.5 - 1e-9) {
+    out.push(0.5);
+    rest /= 0.5;
+  }
+  if (Math.abs(rest - 1) > 1e-9 || out.length === 0) out.push(rest);
+  return out;
+}
+
+/**
+ * Input + filters that turn a video clip's source into frames for the
+ * timeline window [from, to): seek/trim the needed source range, reverse
+ * (bounded by the trim) and retime by the clip speed, then pad with cloned
+ * frames where transition handles reach outside the asset. Mirrors the
+ * resolver's source-time mapping (`sourceTimeAt`).
+ */
+function videoSourceFilters(
+  clip: VideoClip,
+  asset: Asset,
+  path: string,
+  idx: number,
+  from: number,
+  to: number,
+  fps: number,
+  inputs: string[][],
+): string[] {
+  const speed = clipSpeed(clip);
+  const reverse = isReversed(clip);
+  const a = sourceTimeAt(clip, from - clip.start);
+  const b = sourceTimeAt(clip, to - clip.start);
+  const lo = Math.min(a, b);
+  const hi = Math.max(a, b);
+  const seekLo = Math.max(0, lo);
+  const seekHi = Math.max(seekLo, Math.min(asset.duration ?? Infinity, hi));
+  // Timeline seconds of padding where the source window leaves the asset.
+  const missingLo = (seekLo - lo) / speed;
+  const missingHi = (hi - seekHi) / speed;
+  const pre = reverse ? missingHi : missingLo;
+  const post = reverse ? missingLo : missingHi;
+  let inLo = seekLo;
+  let inHi = seekHi;
+  if (reverse && asset.fps) {
+    // Reversed output starts with its last frame, so the window must hold
+    // exactly the frames the resolver shows: first = floor(lo), last = the
+    // frame before `hi`. Half-frame margins keep rounding off frame edges.
+    const f = asset.fps;
+    const first = Math.floor(seekLo * f + 1e-6);
+    const last = Math.max(first, Math.ceil(seekHi * f - 1e-6) - 1);
+    inLo = Math.max(0, (first - 0.5) / f);
+    inHi = (last + 0.5) / f;
+  }
+  inputs.push(['-ss', num(inLo), '-t', num(Math.max(inHi - inLo, 1 / fps)), '-i', path]);
+  const filters = [`[${idx}:v]setpts=PTS-STARTPTS`];
+  // `reverse` buffers every decoded frame of the trimmed window in memory.
+  if (reverse) filters.push('reverse', 'setpts=PTS-STARTPTS');
+  if (speed !== 1) filters.push(`setpts=PTS/${num(speed)}`);
+  filters.push(`fps=${num(fps)}`);
+  if (pre > 0 || post > 0) {
+    filters.push(
+      `tpad=start_mode=clone:start_duration=${num(pre)}:stop_mode=clone:stop_duration=${num(post + 1 / fps)}`,
+    );
+  }
+  return filters;
+}
+
 /** Greedy wrap by estimated glyph width (drawtext does not wrap). */
 export function wrapText(text: string, fontSize: number, maxWidth: number, bold = true): string {
   const charW = fontSize * (bold ? 0.58 : 0.52);
@@ -310,20 +399,18 @@ export function buildRenderGraph(
           continue;
         }
         const idx = inputs.length;
-        if (clip.type === 'video') {
-          const srcFrom = clip.sourceStart + (from - clip.start);
-          const pre = Math.max(0, -srcFrom);
-          const seek = Math.max(0, srcFrom);
-          const available = Math.max(0, (asset.duration ?? Infinity) - seek);
-          const take = Math.min(len - pre, available);
-          const post = Math.max(0, len - pre - take);
-          inputs.push(['-ss', num(seek), '-t', num(Math.max(take, 1 / fps)), '-i', path]);
-          filters.push(`[${idx}:v]setpts=PTS-STARTPTS`, `fps=${num(fps)}`);
-          if (pre > 0 || post > 0) {
-            filters.push(
-              `tpad=start_mode=clone:start_duration=${num(pre)}:stop_mode=clone:stop_duration=${num(post + 1 / fps)}`,
-            );
-          }
+        if (clip.type === 'video' && isFreeze(clip)) {
+          // Freeze frame: decode one frame and hold it.
+          const seek = frameSeek(clip.sourceStart, asset.fps);
+          inputs.push(['-ss', num(seek), '-t', num(2 / fps), '-i', path]);
+          filters.push(
+            `[${idx}:v]trim=end_frame=1`,
+            'setpts=PTS-STARTPTS',
+            `fps=${num(fps)}`,
+            `tpad=stop_mode=clone:stop_duration=${num(len + 1 / fps)}`,
+          );
+        } else if (clip.type === 'video') {
+          filters.push(...videoSourceFilters(clip, asset, path, idx, from, to, fps, inputs));
         } else {
           inputs.push(['-loop', '1', '-framerate', num(fps), '-t', num(len), '-i', path]);
           filters.push(`[${idx}:v]setpts=PTS-STARTPTS`);
@@ -396,13 +483,23 @@ export function buildRenderGraph(
       const path = assetPaths.get(seg.assetId);
       if (!path) continue;
       const idx = inputs.length;
-      const srcFrom = seg.sourceStart + (from - seg.timelineStart);
-      inputs.push(['-ss', num(srcFrom), '-t', num(to - from), '-i', path]);
+      const a = segmentSourceTime(seg, from);
+      const b = segmentSourceTime(seg, to);
+      const srcFrom = Math.min(a, b);
+      inputs.push(['-ss', num(srcFrom), '-t', num(Math.abs(b - a)), '-i', path]);
       const gain = piecewise(seg.gain.map((p) => ({ t: p.time - start, v: p.gain })));
       const label = `a${idx}`;
+      // Trimmed by -t first, so areverse only buffers this segment.
+      const reverse = seg.reverse ? 'areverse,' : '';
+      const tempo =
+        seg.speed === 1
+          ? ''
+          : atempoChain(seg.speed)
+              .map((f) => `atempo=${num(f)},`)
+              .join('');
       chains.push(
         `[${idx}:a]asetpts=PTS-STARTPTS,aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,` +
-          `adelay=${Math.round((from - start) * 1000)}:all=1,volume='${gain}':eval=frame[${label}]`,
+          `${reverse}${tempo}adelay=${Math.round((from - start) * 1000)}:all=1,volume='${gain}':eval=frame[${label}]`,
       );
       labels.push(`[${label}]`);
     }

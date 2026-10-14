@@ -87,6 +87,8 @@ describe('tool catalogue', () => {
         'set_audio_volume',
         'set_brand_kit',
         'set_clip_property',
+        'set_clip_speed',
+        'freeze_frame',
         'split_clip',
         'trim_clip',
         'undo',
@@ -247,6 +249,54 @@ describe('editing via MCP', () => {
     expect(summary.brand?.logo).toBe('asset_logo (logo.png)');
     const cleared = await okCall('set_brand_kit', { reset: true });
     expect(cleared.brand).toBeNull();
+  });
+
+  it('changes clip speed, reverses clips and freezes frames', async () => {
+    await okCall('create_project', { name: 'Speed test', width: 1280, height: 720 });
+    await okCall('apply_operations', {
+      operations: [
+        {
+          type: 'add_asset',
+          asset: {
+            id: 'asset_clip',
+            name: 'clip.mp4',
+            kind: 'video',
+            src: 'assets/asset_clip/clip.mp4',
+            mimeType: 'video/mp4',
+            duration: 10,
+            width: 1280,
+            height: 720,
+            fps: 30,
+            hasVideo: true,
+            hasAudio: true,
+          },
+        },
+        { type: 'add_clip', assetId: 'asset_clip', start: 0, id: 'clip_a' },
+        { type: 'add_clip', assetId: 'asset_clip', start: 10, duration: 2, id: 'clip_b' },
+      ],
+    });
+    const fast = await okCall('set_clip_speed', { clipId: 'clip_a', speed: 2 });
+    expect(fast.summary).toBe('Clip clip_a: speed 2×, forward, now 0s–5s.');
+    const slow = await call('set_clip_speed', { clipId: 'clip_a', speed: 0.5 });
+    expect(JSON.stringify(slow.content)).toMatch(/overlap clip_b.*Hint: Pass ripple: true/);
+    await okCall('set_clip_speed', { clipId: 'clip_a', reverse: true, speed: 1, ripple: true });
+    const nothing = await call('set_clip_speed', { clipId: 'clip_a' });
+    expect(nothing.isError).toBe(true);
+
+    const frozen = await okCall('freeze_frame', { time: 4, duration: 1.5 });
+    expect(frozen.freezeClipId).toMatch(/^clip_/);
+    expect(String(frozen.summary)).toMatch(/source 6s of clip clip_a/);
+    const summary = (await okCall('get_project')).project as {
+      tracks: Array<{ clips: Array<{ id: string; freeze?: boolean; reverse?: boolean }> }>;
+    };
+    const clips = summary.tracks[0]!.clips;
+    expect(clips.find((c) => c.id === frozen.freezeClipId)?.freeze).toBe(true);
+    expect(clips.find((c) => c.id === 'clip_a')?.reverse).toBe(true);
+    // clip_b moved 15 → 16.5 s (ripple, then the 1.5 s hold).
+    const explicit = await okCall('freeze_frame', { clipId: 'clip_b', time: 17 });
+    expect(String(explicit.summary)).toMatch(/17s–19s/);
+    const none = await call('freeze_frame', { time: 99 });
+    expect(JSON.stringify(none.content)).toMatch(/No video clip plays at 99s.*Hint/);
   });
 
   it('returns actionable errors', async () => {
