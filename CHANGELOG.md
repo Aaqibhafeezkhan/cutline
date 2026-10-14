@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Transcript editing**: edit the video by editing its transcript. The editor's new Transcript
+  panel shows the timeline's words as text (paragraphs at pauses), highlights the word being
+  spoken and seeks on click. Select words (drag, Shift+click or Shift+arrow keys) and press
+  Delete/Backspace to cut exactly those words out of all unlocked tracks with one ripple
+  `delete_range` (one undo step); the right-click menu also offers "Remove fillers". The new MCP
+  tool `delete_words` does the same for agents, by exact phrase (`text`, with `occurrence` or
+  `all`) or by word index range, with `dryRun`. Core exports the pure helpers
+  `wordRangesToCuts`, `findPhraseInWords` and `groupParagraphs`; the server adds a
+  `POST /api/projects/:id/transcript` route that returns cached (or freshly transcribed) per-asset
+  words. The MCP server now exposes 34 tools.
+
 ## [0.3.0] - 2026-10-13
 
 Audio and branding: remove filler words, detect beats and cut on the beat, duck music under
