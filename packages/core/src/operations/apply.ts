@@ -28,6 +28,7 @@ import {
   moveTrack,
   removeAsset,
   removeTrack,
+  setAgentMode,
   updateProject,
   updateTrack,
 } from './structure';
@@ -36,6 +37,7 @@ type Handler<T extends OperationType> = (draft: Project, op: OpOf<T>, ctx: OpCon
 
 const HANDLERS: { [K in OperationType]: Handler<K> } = {
   update_project: updateProject,
+  set_agent_mode: setAgentMode,
   add_asset: addAsset,
   remove_asset: removeAsset,
   add_track: addTrack,

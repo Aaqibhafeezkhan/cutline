@@ -54,6 +54,12 @@ export const BrandSchema = z.object({
   logoPosition: LogoPositionSchema.optional().describe('Corner for the logo (default top-right)'),
 });
 
+/**
+ * How edits from AI agents are handled: applied right away ("direct") or
+ * collected as proposals the user reviews ("suggest").
+ */
+export const AgentModeSchema = z.enum(['direct', 'suggest']);
+
 export const ProjectSettingsSchema = z.object({
   width: z.number().int().min(16).max(7680).default(1920).describe('Output width in pixels'),
   height: z.number().int().min(16).max(4320).default(1080).describe('Output height in pixels'),
@@ -61,6 +67,9 @@ export const ProjectSettingsSchema = z.object({
   backgroundColor: ColorSchema.default('#000000'),
   sampleRate: z.union([z.literal(44100), z.literal(48000)]).default(48000),
   brand: BrandSchema.optional().describe('Brand kit: colors, fonts and logo'),
+  agentMode: AgentModeSchema.optional().describe(
+    'How agent edits are handled: "direct" (default) applies them, "suggest" turns them into proposals for review',
+  ),
 });
 
 export const AssetKindSchema = z.enum(['video', 'audio', 'image']);
@@ -344,6 +353,7 @@ export const ProjectSchema = z.object({
 // ---------------------------------------------------------------------------
 
 export type ProjectSettings = z.output<typeof ProjectSettingsSchema>;
+export type AgentMode = z.output<typeof AgentModeSchema>;
 export type Brand = z.output<typeof BrandSchema>;
 export type BrandColors = z.output<typeof BrandColorsSchema>;
 export type BrandColorKey = z.output<typeof BrandColorKeySchema>;

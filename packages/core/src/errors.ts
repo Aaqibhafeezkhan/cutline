@@ -8,6 +8,8 @@ export type ErrorCode =
   | 'IN_USE'
   | 'NOTHING_TO_UNDO'
   | 'NOTHING_TO_REDO'
+  | 'FORBIDDEN'
+  | 'STALE'
   | 'UNSUPPORTED_VERSION'
   | 'INVARIANT';
 

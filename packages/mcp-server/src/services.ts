@@ -27,6 +27,8 @@ export interface Services {
 
 export interface ServiceOverrides {
   projectStore?: ProjectStore;
+  /** Pending agent proposals, one JSON document per project. */
+  proposalStore?: ProjectStore;
   blobStore?: BlobStore;
   transcriber?: Transcriber;
   ctx?: OpContext;
@@ -37,7 +39,9 @@ export function createServices(config: CutlineConfig, overrides: ServiceOverride
     overrides.projectStore ?? new LocalProjectStore(join(config.dataDir, 'projects'));
   const blobs = overrides.blobStore ?? new LocalBlobStore(config.dataDir);
   const ffmpeg = new Ffmpeg(config.ffmpegPath, config.ffprobePath);
-  const docs = new DocumentService(projects, overrides.ctx);
+  const proposals =
+    overrides.proposalStore ?? new LocalProjectStore(join(config.dataDir, 'proposals'));
+  const docs = new DocumentService(projects, overrides.ctx, proposals);
   const transcriber = overrides.transcriber ?? new WhisperTranscriber(config.whisperModel);
   const renderer = new Renderer(ffmpeg, blobs);
   return {
