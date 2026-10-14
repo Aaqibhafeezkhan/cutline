@@ -2,7 +2,14 @@ import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { CutlineError, projectDuration, type Project } from '@cutline/core';
+import {
+  CutlineError,
+  chapterList,
+  chaptersInRange,
+  ffmetadataChapters,
+  projectDuration,
+  type Project,
+} from '@cutline/core';
 import type { Ffmpeg } from '../media/ffmpeg';
 import type { BlobStore } from '../storage/types';
 import { resolveFontFile } from './fonts';
@@ -126,12 +133,25 @@ export class Renderer {
     return this.withGraph(
       project,
       { start, end, width, height, fps, includeAudio: true },
-      async (graph, scriptArgs) => {
+      async (graph, scriptArgs, dir) => {
+        // Chapter markers become MP4 chapters (ffmetadata as an extra input).
+        const chapters = chaptersInRange(chapterList(project), start, end);
+        const chapterArgs: string[] = [];
+        const mapArgs: string[] = [];
+        if (chapters.length) {
+          const meta = join(dir, 'chapters.txt');
+          await writeFile(meta, ffmetadataChapters(chapters, graph.duration, project.name));
+          const idx = graph.inputs.length;
+          chapterArgs.push('-f', 'ffmetadata', '-i', meta);
+          mapArgs.push('-map_metadata', String(idx), '-map_chapters', String(idx));
+        }
         await this.ffmpeg.run(
           [
             '-y',
             ...graph.inputs.flat(),
+            ...chapterArgs,
             ...scriptArgs,
+            ...mapArgs,
             '-map',
             `[${graph.video}]`,
             '-map',

@@ -73,6 +73,25 @@ export function chapterList(project: Project): Chapter[] {
     .sort((a, b) => a.time - b.time);
 }
 
+/**
+ * Chapters of the timeline window [start, end), re-timed so the window starts
+ * at 0. The chapter that is running at `start` begins the list at 0.
+ */
+export function chaptersInRange(
+  chapters: readonly Chapter[],
+  start: number,
+  end: number,
+): Chapter[] {
+  const out: Chapter[] = [];
+  for (const c of chapters) {
+    if (c.time >= end - EPSILON) break;
+    const time = roundTime(Math.max(0, c.time - start));
+    if (time === 0) out.length = 0;
+    out.push({ time, title: c.title });
+  }
+  return out;
+}
+
 /** "05:30" (or "1:05:30" when `hours`), as YouTube expects in descriptions. */
 export function formatTimestamp(t: number, hours = false): string {
   const total = Math.max(0, Math.floor(t + EPSILON));

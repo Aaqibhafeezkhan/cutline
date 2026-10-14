@@ -3,6 +3,7 @@ import type { CutlineError } from '../src';
 import {
   applyOperation,
   chapterList,
+  chaptersInRange,
   ffmetadataChapters,
   findProblems,
   formatTimestamp,
@@ -472,6 +473,20 @@ describe('marker helpers', () => {
         35,
       ),
     ).toContain('Chapter "C" (00:40) is 0s long; YouTube needs at least 10s.');
+  });
+
+  it('re-times chapters for an exported range', () => {
+    const list = [
+      { time: 0, title: 'A' },
+      { time: 10, title: 'B' },
+      { time: 20, title: 'C' },
+      { time: 30, title: 'D' },
+    ];
+    expect(chaptersInRange(list, 12, 25)).toEqual([
+      { time: 0, title: 'B' },
+      { time: 8, title: 'C' },
+    ]);
+    expect(chaptersInRange(list, 0, 40)).toEqual(list);
   });
 
   it('writes ffmetadata chapters', () => {
