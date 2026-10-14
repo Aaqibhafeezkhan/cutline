@@ -1,4 +1,4 @@
-import type { Asset, CutlineErrorJSON, HistoryInfo, Project } from '@cutline/core';
+import type { Asset, CutlineErrorJSON, HistoryInfo, Project, Word } from '@cutline/core';
 
 const TOKEN_KEY = 'cutline.token';
 
@@ -154,6 +154,16 @@ export const api = {
     }>(`/api/projects/${projectId}/fillers/remove`, {
       method: 'POST',
       body: JSON.stringify(options),
+    }),
+  /** Per-asset transcripts (source time); transcribe=true runs Whisper for missing ones. */
+  transcript: (projectId: string, transcribe = false) =>
+    request<{
+      byAsset: Record<string, Word[]>;
+      missing: string[];
+      words: Word[];
+    }>(`/api/projects/${projectId}/transcript`, {
+      method: 'POST',
+      body: JSON.stringify({ transcribe }),
     }),
   duckMusic: (projectId: string, musicTrackId: string) =>
     request<{ summary: string }>(`/api/projects/${projectId}/audio/duck`, {
