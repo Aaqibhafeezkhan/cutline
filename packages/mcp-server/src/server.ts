@@ -42,6 +42,10 @@ export async function startServer(
       'ffmpeg not found: perception tools and server-side export are disabled until it is installed (or FFMPEG_PATH is set).',
     );
   }
+  const chat = services.chat.status();
+  if (chat.fake) log.warn('CUTLINE_CHAT_FAKE=1: the editor chat uses a scripted dev model.');
+  else if (chat.enabled) log.info(`Editor chat enabled (model ${chat.model}).`);
+  else log.info('Editor chat is off: set ANTHROPIC_API_KEY to enable it.');
   if (!config.token && ['0.0.0.0', '::'].includes(config.host)) {
     log.warn(
       'Listening on all interfaces without CUTLINE_TOKEN. Set a token before exposing this server.',
