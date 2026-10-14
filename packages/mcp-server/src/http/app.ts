@@ -19,7 +19,11 @@ import {
   type DuckOptions,
   type LoudnessOptions,
 } from '../media/mixing';
-import { planFillerCut, transcribeTimeline } from '../media/timeline-transcript';
+import {
+  planFillerCut,
+  timelineTranscriptSources,
+  transcribeTimeline,
+} from '../media/timeline-transcript';
 import { createMcpServer } from '../mcp/server';
 import { log } from '../log';
 import type { Services } from '../services';
@@ -268,6 +272,44 @@ export function createApp(services: Services): AppHandle {
       const summary = `Removed ${plan.found.length} filler word(s) (${plan.removed}s).`;
       report('finished', summary);
       res.json({ summary, ...payload, version: result.version });
+    }),
+  );
+
+  // The editor's transcript panel: per-asset words (re-mapped client-side after every edit).
+  // transcribe=false only returns cached transcripts; true runs Whisper for the missing ones.
+  api.post(
+    '/projects/:id/transcript',
+    json,
+    route(async (req, res) => {
+      const id = param(req, 'id');
+      const body = (req.body ?? {}) as { transcribe?: boolean };
+      if (body.transcribe !== true) {
+        res.json(await timelineTranscriptSources(services, id));
+        return;
+      }
+      const activityId = randomUUID();
+      const report = (status: 'started' | 'progress' | 'finished' | 'failed', message: string) =>
+        docs.activity({
+          projectId: id,
+          id: activityId,
+          origin: USER,
+          tool: 'get_transcript',
+          status,
+          message,
+          at: new Date().toISOString(),
+        });
+      report('started', 'Transcribing the timeline audio…');
+      try {
+        const sources = await timelineTranscriptSources(services, id, {
+          transcribe: true,
+          progress: { update: (_f, message) => report('progress', message) },
+        });
+        report('finished', `Transcription finished (${sources.words.length} words).`);
+        res.json(sources);
+      } catch (err) {
+        report('failed', 'Transcription failed.');
+        throw err;
+      }
     }),
   );
 

@@ -16,10 +16,14 @@ import {
   TextStylePatchSchema,
   TimeSchema,
   TransformPatchSchema,
+  findPhraseInWords,
+  round3,
   summarizeProject,
   templateOperations,
+  wordRangesToCuts,
   wordsToCues,
   type Word,
+  type WordSelection,
 } from '@cutline/core';
 import { planFillerCut, transcribeTimeline } from '../../media/timeline-transcript';
 import { editPayload, guard, ok, type ToolContext } from '../context';
@@ -426,6 +430,125 @@ export function registerEditingTools(server: McpServer, ctx: ToolContext): void 
         `Removed ${plan.found.length} filler word(s), ${plan.removed}s in ${plan.ranges.length} cut(s): ${listed}.`,
         { ...base, ...editPayload(id, result) },
       );
+    }),
+  );
+
+  server.registerTool(
+    'delete_words',
+    {
+      title: 'Delete words',
+      description:
+        'Edit the video by editing its transcript: remove spoken words from the timeline, e.g. "remove the sentence \'as I said before\'". Give either text (an exact phrase; case and punctuation are ignored) or wordIndexes (inclusive, into the words of get_transcript format="words" for the timeline). Transcribes the timeline (local Whisper, cached) and removes the words with ONE delete_range (one undo step, ripples all unlocked tracks so audio, video and captions stay in sync). By default the first occurrence of text is removed; pick another with occurrence or all of them with all=true. Use dryRun=true to see what would be cut.',
+      inputSchema: z
+        .object({
+          projectId,
+          text: z
+            .string()
+            .min(1)
+            .max(2000)
+            .optional()
+            .describe('Exact phrase to remove (case and punctuation are ignored)'),
+          occurrence: z
+            .number()
+            .int()
+            .min(1)
+            .optional()
+            .describe('Which occurrence of text to remove, 1-based (default 1)'),
+          all: z.boolean().optional().describe('Remove every occurrence of text (default false)'),
+          wordIndexes: z
+            .object({ start: z.number().int().min(0), end: z.number().int().min(0) })
+            .optional()
+            .describe('Inclusive word index range into the timeline transcript (get_transcript)'),
+          padding: z
+            .number()
+            .min(0)
+            .max(0.5)
+            .optional()
+            .describe('Seconds also cut around the words, never into kept words (default 0.05)'),
+          language: z
+            .string()
+            .min(2)
+            .max(10)
+            .optional()
+            .describe('Spoken language for transcription, e.g. "en", "de" (default: auto-detect)'),
+          dryRun: z
+            .boolean()
+            .optional()
+            .describe('Only report what would be cut, change nothing (default false)'),
+        })
+        .refine((a) => (a.text === undefined) !== (a.wordIndexes === undefined), {
+          message: 'Give exactly one of text or wordIndexes.',
+        }),
+      annotations: { destructiveHint: true },
+    },
+    guard(async (args, extra) => {
+      const id = await ctx.projectId(args.projectId);
+      const words = await timelineWords(ctx, id, args.language, extra);
+      if (words.length === 0) {
+        throw new CutlineError('INVALID_OPERATION', 'No speech found in the timeline audio.', {
+          hint: 'delete_words needs spoken words; use delete_range to cut by time instead.',
+        });
+      }
+      let selections: WordSelection[];
+      if (args.wordIndexes) {
+        selections = [args.wordIndexes];
+      } else {
+        const found = findPhraseInWords(words, args.text!);
+        if (found.length === 0) {
+          throw new CutlineError('NOT_FOUND', `"${args.text}" was not found in the transcript.`, {
+            hint: 'Check the exact wording with get_transcript (format "words"); Whisper may spell or split words differently.',
+          });
+        }
+        const n = args.occurrence ?? 1;
+        if (!args.all && n > found.length) {
+          throw new CutlineError(
+            'NOT_FOUND',
+            `"${args.text}" occurs ${found.length} time(s), so there is no occurrence ${n}.`,
+            { hint: `Pass occurrence between 1 and ${found.length}, or all=true.` },
+          );
+        }
+        selections = args.all ? found : [found[n - 1]!];
+      }
+      const ranges = wordRangesToCuts(words, selections, { padding: args.padding ?? 0.05 });
+      const removedWords = selections.map((s) => ({
+        ...s,
+        text: words
+          .slice(s.start, s.end + 1)
+          .map((w) => w.text)
+          .join(' '),
+        startTime: words[s.start]!.start,
+        endTime: words[s.end]!.end,
+      }));
+      const removed = round3(ranges.reduce((s, r) => s + r.end - r.start, 0));
+      const listed = removedWords.map((r) => `"${r.text}" at ${r.startTime}s`).join(', ');
+      const base = {
+        projectId: id,
+        dryRun: Boolean(args.dryRun),
+        wordCount: words.length,
+        removed: removedWords,
+        ranges,
+        removedDuration: removed,
+      };
+      if (ranges.length === 0) {
+        return ok(`The selected words take no time on the timeline; nothing to cut.`, base);
+      }
+      if (args.dryRun) {
+        return ok(
+          `Would remove ${listed} (${removed}s in ${ranges.length} cut(s)). Call again without dryRun to cut.`,
+          base,
+        );
+      }
+      const count = selections.reduce((s, r) => s + r.end - r.start + 1, 0);
+      const result = await docs.apply(
+        id,
+        [{ type: 'delete_range', ranges }],
+        ctx.origin(),
+        `Delete ${count} word(s)`,
+      );
+      return ok(`Removed ${listed} (${removed}s in ${ranges.length} cut(s)).`, {
+        ...base,
+        ...editPayload(id, result),
+      });
     }),
   );
 
