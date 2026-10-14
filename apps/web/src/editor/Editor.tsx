@@ -25,6 +25,7 @@ import { Properties } from './Properties';
 import { ShortcutsDialog } from './ShortcutsDialog';
 import { Timeline } from './timeline/Timeline';
 import { TopBar } from './TopBar';
+import { TranscriptPanel } from './TranscriptPanel';
 
 function useShortcuts(openHelp: () => void) {
   useEffect(() => {
@@ -113,12 +114,16 @@ export function Editor({ projectId }: { projectId: string }) {
           <Tabs defaultValue="properties" className="flex min-h-0 flex-1 flex-col">
             <TabsList>
               <TabsTrigger value="properties">Properties</TabsTrigger>
+              <TabsTrigger value="transcript">Transcript</TabsTrigger>
               <TabsTrigger value="captions">Captions</TabsTrigger>
               <TabsTrigger value="chapters">Chapters</TabsTrigger>
               <TabsTrigger value="activity">Activity</TabsTrigger>
             </TabsList>
             <TabsContent value="properties" className="min-h-0 flex-1 overflow-y-auto">
               <Properties />
+            </TabsContent>
+            <TabsContent value="transcript" className="min-h-0 flex-1">
+              <TranscriptPanel />
             </TabsContent>
             <TabsContent value="captions" className="min-h-0 flex-1">
               <CaptionsPanel />

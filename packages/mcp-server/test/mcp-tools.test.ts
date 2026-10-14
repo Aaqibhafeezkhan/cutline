@@ -72,6 +72,7 @@ describe('tool catalogue', () => {
         'cut_to_beats',
         'delete_clip',
         'delete_range',
+        'delete_words',
         'detect_beats',
         'detect_scenes',
         'detect_silence',
@@ -348,6 +349,48 @@ describe.runIf(hasFfmpeg && hasFixtures)('media tools via MCP (ffmpeg)', () => {
 
     const bad = await call('remove_filler_words', { padding: 2 });
     expect(bad.isError).toBe(true);
+  });
+
+  it('deletes words by phrase or index in one undo step', async () => {
+    const before = (await okCall('get_project')).project as { duration: number };
+    // Timeline words now: Hello, world., Second, part (the filler is gone).
+    const words = (await okCall('get_transcript', { format: 'words' })).words as Array<{
+      text: string;
+      start: number;
+      end: number;
+    }>;
+    expect(words.map((x) => x.text)).toEqual(['Hello', 'world.', 'Second', 'part']);
+    const preview = await okCall('delete_words', { text: 'second PART', dryRun: true });
+    const removed = preview.removed as Array<{ start: number; end: number; text: string }>;
+    expect(removed).toMatchObject([{ start: 2, end: 3, text: 'Second part' }]);
+    const ranges = preview.ranges as Array<{ start: number; end: number }>;
+    expect(ranges).toHaveLength(1);
+    expect(ranges[0]!.start).toBeCloseTo(words[2]!.start - 0.05, 3);
+    expect(ranges[0]!.end).toBeCloseTo(words[3]!.end + 0.05, 3);
+    expect(preview.version).toBeUndefined();
+    expect(String(preview.summary)).toMatch(/^Would remove "Second part"/);
+
+    const cut = await okCall('delete_words', { wordIndexes: { start: 0, end: 0 }, padding: 0 });
+    expect(cut.duration as number).toBeCloseTo(
+      before.duration - (words[0]!.end - words[0]!.start),
+      3,
+    );
+    expect(String(cut.summary)).toMatch(/^Removed "Hello"/);
+    const undone = await okCall('undo');
+    expect(undone.summary).toMatch(/Delete 1 word/);
+
+    const all = await okCall('delete_words', { text: 'world', all: true, dryRun: true });
+    expect(all.removed).toHaveLength(1);
+
+    const missing = await call('delete_words', { text: 'not said' });
+    expect(missing.isError).toBe(true);
+    expect(JSON.stringify(missing.content)).toMatch(/get_transcript/);
+    const second = await call('delete_words', { text: 'hello', occurrence: 2 });
+    expect(JSON.stringify(second.content)).toMatch(/occurs 1 time/);
+    const both = await call('delete_words', { text: 'hello', wordIndexes: { start: 0, end: 0 } });
+    expect(both.isError).toBe(true);
+    const outOfRange = await call('delete_words', { wordIndexes: { start: 0, end: 99 } });
+    expect(JSON.stringify(outOfRange.content)).toMatch(/0 <= start <= end <= 3/);
   });
 
   it('looks at frames and scenes', async () => {
