@@ -10,7 +10,7 @@ import {
   type Origin,
   type ServerMessage,
 } from '@cutline/core';
-import type { ActivityEvent, ChangeEvent } from '../documents';
+import type { ActivityEvent, ChangeEvent, ProposalsEvent } from '../documents';
 import { log } from '../log';
 import type { Services } from '../services';
 import { allowedHostnames, checkRequest } from './security';
@@ -41,6 +41,7 @@ export class SyncHub {
     this.hosts = allowedHostnames(services.config);
     services.docs.events.on('change', this.onChange);
     services.docs.events.on('activity', this.onActivity);
+    services.docs.events.on('proposals', this.onProposals);
     services.presence.events.on('change', this.onPresence);
     this.wss.on('connection', (socket) => this.onConnection(socket));
   }
@@ -128,6 +129,19 @@ export class SyncHub {
             projectId: msg.projectId,
             participants: this.services.presence.list(msg.projectId),
           });
+          this.send(client, {
+            type: 'proposals',
+            projectId: msg.projectId,
+            proposals: await this.services.docs.proposals(msg.projectId),
+          });
+          return;
+        }
+        case 'proposal': {
+          const docs = this.services.docs;
+          if (msg.action === 'accept') await docs.acceptProposal(msg.projectId, msg.proposalId);
+          else await docs.rejectProposal(msg.projectId, msg.proposalId);
+          const { version } = await docs.get(msg.projectId);
+          this.send(client, { type: 'ack', requestId: msg.requestId, ok: true, version });
           return;
         }
         case 'ops': {
@@ -190,6 +204,10 @@ export class SyncHub {
     this.broadcast(e.projectId, { type: 'activity', ...e });
   };
 
+  private onProposals = (e: ProposalsEvent): void => {
+    this.broadcast(e.projectId, { type: 'proposals', ...e });
+  };
+
   private onPresence = (projectId: string): void => {
     this.broadcast(projectId, {
       type: 'presence',
@@ -201,6 +219,7 @@ export class SyncHub {
   close(): void {
     this.services.docs.events.off('change', this.onChange);
     this.services.docs.events.off('activity', this.onActivity);
+    this.services.docs.events.off('proposals', this.onProposals);
     this.services.presence.events.off('change', this.onPresence);
     for (const c of this.clients.values()) c.socket.close(1001, 'server shutting down');
     this.wss.close();

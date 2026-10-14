@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import {
+  AgentModeSchema,
   AnimatablePropertySchema,
   AnimationSchema,
   AssetSchema,
@@ -113,7 +114,17 @@ const RangeSchema = z
 export const UpdateProjectOpSchema = z.object({
   type: z.literal('update_project'),
   name: z.string().min(1).max(200).optional(),
-  settings: ProjectSettingsSchema.partial().optional(),
+  settings: ProjectSettingsSchema.omit({ agentMode: true })
+    .partial()
+    .optional()
+    .describe('Settings to change (the agent mode has its own operation, set_agent_mode)'),
+});
+
+export const SetAgentModeOpSchema = z.object({
+  type: z.literal('set_agent_mode'),
+  mode: AgentModeSchema.describe(
+    '"direct": agent edits apply immediately; "suggest": agent edits become proposals the user accepts or rejects',
+  ),
 });
 
 export const AddAssetOpSchema = z.object({
@@ -485,6 +496,7 @@ export const AssembleRangesOpSchema = z.object({
 
 export const OperationSchema = z.discriminatedUnion('type', [
   UpdateProjectOpSchema,
+  SetAgentModeOpSchema,
   AddAssetOpSchema,
   RemoveAssetOpSchema,
   AddTrackOpSchema,

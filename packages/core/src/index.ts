@@ -30,4 +30,5 @@ export {
 } from './operations/apply';
 export type { OpOutcome } from './operations/outcome';
 export * from './protocol';
+export * from './proposals';
 export * from './templates';

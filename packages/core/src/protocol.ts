@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { CutlineErrorJSON } from './errors';
 import type { Origin } from './history';
 import type { JsonPatchOperation } from './patch';
+import type { Proposal } from './proposals';
 import type { Project } from './schema';
 
 /** Shared by the server and the browser: the WebSocket sync protocol. */
@@ -39,6 +40,14 @@ export const ClientMessageSchema = z.discriminatedUnion('type', [
     type: z.enum(['undo', 'redo']),
     requestId: z.string().min(1).max(100),
     projectId: z.string().min(1),
+  }),
+  z.object({
+    type: z.literal('proposal'),
+    requestId: z.string().min(1).max(100),
+    projectId: z.string().min(1),
+    action: z.enum(['accept', 'reject']),
+    /** Omit to accept/reject all proposals of the project. */
+    proposalId: z.string().min(1).max(100).optional(),
   }),
   z.object({ type: z.literal('ping') }),
 ]);
@@ -109,6 +118,14 @@ export interface ActivityMessage {
   at: string;
 }
 
+/** The pending agent proposals of a project (sent in full whenever they change). */
+export interface ProposalsMessage {
+  type: 'proposals';
+  projectId: string;
+  /** Oldest first. */
+  proposals: Proposal[];
+}
+
 export interface ErrorMessage {
   type: 'error';
   error: CutlineErrorJSON;
@@ -124,5 +141,6 @@ export type ServerMessage =
   | AckMessage
   | PresenceMessage
   | ActivityMessage
+  | ProposalsMessage
   | ErrorMessage
   | PongMessage;

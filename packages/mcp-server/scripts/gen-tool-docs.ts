@@ -67,6 +67,7 @@ const GROUPS: Record<string, string[]> = {
     'create_highlight_reel',
   ],
   Output: ['render_preview', 'export_video'],
+  Review: ['list_proposals'],
 };
 
 function typeOf(s: Schema): string {

@@ -16,6 +16,7 @@ import {
   TextStylePatchSchema,
   TimeSchema,
   TransformPatchSchema,
+  agentModeOf,
   findPhraseInWords,
   round3,
   summarizeProject,
@@ -27,6 +28,7 @@ import {
 } from '@cutline/core';
 import { planFillerCut, transcribeTimeline } from '../../media/timeline-transcript';
 import { editPayload, guard, ok, type ToolContext } from '../context';
+import { proposalInfo } from './review';
 
 const projectId = IdSchema.optional().describe(
   'Project id. Omit to use the project you created or used most recently.',
@@ -120,12 +122,20 @@ export function registerEditingTools(server: McpServer, ctx: ToolContext): void 
       const { project, version, history } = await docs.get(id);
       const others = list.filter((p) => p.id !== id).map((p) => ({ id: p.id, name: p.name }));
       const summary = summarizeProject(project);
+      const agentMode = agentModeOf(project);
+      const proposals = await docs.proposals(id);
+      const review =
+        agentMode === 'suggest'
+          ? ` Suggest mode: your edits are proposed for the user's review (${proposals.length} pending).`
+          : '';
       return ok(
-        `Project "${project.name}" (${id}): ${summary.duration}s, ${summary.tracks.length} tracks, ${project.assets.length} assets.`,
+        `Project "${project.name}" (${id}): ${summary.duration}s, ${summary.tracks.length} tracks, ${project.assets.length} assets.${review}`,
         {
           version,
           editorUrl: ctx.editorUrl(id),
           history,
+          agentMode,
+          ...(proposals.length && { proposals: proposals.map(proposalInfo) }),
           project: args.full ? project : summary,
           ...(others.length && { otherProjects: others }),
         },
