@@ -1,5 +1,7 @@
 import { join } from 'node:path';
 import type { OpContext } from '@cutline/core';
+import { chatModelFromEnv, type ChatModel } from './chat/model';
+import { ChatService } from './chat/service';
 import type { CutlineConfig } from './config';
 import { DocumentService } from './documents';
 import { ExportService } from './exports';
@@ -23,6 +25,8 @@ export interface Services {
   exports: ExportService;
   presence: PresenceService;
   transcriber: Transcriber;
+  /** In-editor chat with Claude (disabled without ANTHROPIC_API_KEY). */
+  chat: ChatService;
 }
 
 export interface ServiceOverrides {
@@ -32,6 +36,8 @@ export interface ServiceOverrides {
   blobStore?: BlobStore;
   transcriber?: Transcriber;
   ctx?: OpContext;
+  /** Chat model override (tests); null disables chat. Default: from the environment. */
+  chatModel?: ChatModel | null;
 }
 
 export function createServices(config: CutlineConfig, overrides: ServiceOverrides = {}): Services {
@@ -44,7 +50,7 @@ export function createServices(config: CutlineConfig, overrides: ServiceOverride
   const docs = new DocumentService(projects, overrides.ctx, proposals);
   const transcriber = overrides.transcriber ?? new WhisperTranscriber(config.whisperModel);
   const renderer = new Renderer(ffmpeg, blobs);
-  return {
+  const services: Services = {
     config,
     docs,
     blobs,
@@ -55,5 +61,15 @@ export function createServices(config: CutlineConfig, overrides: ServiceOverride
     exports: new ExportService(renderer, blobs, docs),
     presence: new PresenceService(),
     transcriber,
+    chat: undefined as unknown as ChatService,
   };
+  const chatModel =
+    overrides.chatModel !== undefined ? overrides.chatModel : chatModelFromEnv(config);
+  services.chat = new ChatService(services, {
+    model: chatModel,
+    modelId: config.chatModel,
+    effort: config.chatEffort,
+    fake: config.chatFake && overrides.chatModel === undefined,
+  });
+  return services;
 }
