@@ -13,7 +13,7 @@
   <a href="https://github.com/Aepzie/cutline/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/Aepzie/cutline/actions/workflows/ci.yml/badge.svg"></a>
   <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
   <img alt="TypeScript strict" src="https://img.shields.io/badge/TypeScript-strict-3178c6.svg">
-  <img alt="MCP" src="https://img.shields.io/badge/MCP-40%20tools-8a63d2.svg">
+  <img alt="MCP" src="https://img.shields.io/badge/MCP-42%20tools-8a63d2.svg">
 </p>
 
 > 🎬 _Demo GIF placeholder: Claude removes silences and adds captions while the timeline updates live. (Contributions welcome: record one with `pnpm --filter @cutline/mcp-server demo`.)_
@@ -48,6 +48,9 @@ the mouse, an agent can do with a tool call (and vice versa).
 - **Transcript editing**: edit the video like a text document. The transcript panel shows the
   spoken words (current word highlighted, click to jump); select words and press Delete to cut
   them out of video and audio in one undo step
+- **Speed, reverse and freeze frames**: slow motion or fast forward (0.1–16×, presets in the
+  properties panel), play clips backwards, and hold the frame at the playhead (F) — in the preview,
+  the browser export and the server render alike
 - Audio auto-ducking (music under speech) and loudness normalization (-14 LUFS) in one click
 - **Live agent view**: agent edits pulse on the timeline, an activity feed shows what happened
   (also to editors that join later), presence shows which agent is connected
@@ -63,11 +66,11 @@ the mouse, an agent can do with a tool call (and vice versa).
 - Shared undo/redo: undo the agent's change, or let the agent undo yours
 - Export in the browser (WebCodecs in a Web Worker, MP4 H.264/AAC) or on the server (ffmpeg)
 
-**MCP server (40 tools)**
+**MCP server (42 tools)**
 
 - **Editing:** `create_project`, `get_project`, `add_asset`, `add_clip`, `split_clip`, `trim_clip`,
   `move_clip`, `delete_clip`, `delete_range`, `remove_filler_words`, `delete_words`,
-  `set_clip_property`,
+  `set_clip_property`, `set_clip_speed`, `freeze_frame`,
   `animate_clip`,
   `add_text_overlay`, `add_shape`, `add_template`, `set_brand_kit`, `add_captions`, `add_transition`,
   `set_audio_volume`, `apply_operations`, `undo`, `redo`
@@ -266,7 +269,11 @@ Cutline is a v0.1. Things to know:
   these as warnings).
 - **History is in memory:** undo/redo resets when the server restarts; documents themselves are
   persisted to disk.
-- **No speed changes, nested sequences, color grading or multi-user permissions yet.**
+- **Speed is constant per clip** (no speed ramps). Sped-up/slowed audio changes pitch in the
+  browser preview and browser export (resampling); server renders keep the pitch (`atempo`).
+  Reversed clips decode backwards in half-second windows in the browser, which costs more CPU than
+  forward playback; the server renderer buffers the reversed part of each clip in memory.
+- **No nested sequences, color grading or multi-user permissions yet.**
 - **Transcription quality** depends on the Whisper model (`CUTLINE_WHISPER_MODEL`); the default
   `whisper-base` is fast but not perfect, especially for names.
 - **Security:** designed for local use. It binds to `127.0.0.1` by default. Read

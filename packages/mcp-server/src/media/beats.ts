@@ -298,13 +298,26 @@ export function detectBeats(
   };
 }
 
-/** Beats of a clip's source window mapped to timeline time (clip without speed changes). */
+/** Beats of a clip's source window mapped to timeline time (follows speed and reverse). */
 export function beatsInClip(
   beats: readonly number[],
-  clip: { start: number; duration: number; sourceStart: number },
+  clip: {
+    start: number;
+    duration: number;
+    sourceStart: number;
+    speed?: number;
+    reverse?: boolean;
+    freeze?: boolean;
+  },
 ): number[] {
-  const end = clip.sourceStart + clip.duration;
+  const speed = clip.freeze ? 0 : (clip.speed ?? 1);
+  if (speed === 0) return [];
+  const end = clip.sourceStart + clip.duration * speed;
   return beats
     .filter((b) => b >= clip.sourceStart - 1e-6 && b < end - 1e-6)
-    .map((b) => round3(clip.start + b - clip.sourceStart));
+    .map((b) => {
+      const offset = (b - clip.sourceStart) / speed;
+      return round3(clip.start + (clip.reverse ? clip.duration - offset : offset));
+    })
+    .sort((a, b) => a - b);
 }

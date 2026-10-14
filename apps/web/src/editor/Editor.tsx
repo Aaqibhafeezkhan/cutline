@@ -13,6 +13,7 @@ import {
   addMarker,
   addText,
   deleteSelection,
+  freezeAtPlayhead,
   nudgeSelection,
   selectAll,
   splitAtPlayhead,
@@ -57,6 +58,7 @@ function useShortcuts(openHelp: () => void, toggleChat: () => void) {
       else if (e.key === ' ') togglePlay();
       else if (key === 's' && !mod) void splitAtPlayhead();
       else if (key === 't' && !mod) void addText();
+      else if (key === 'f' && !mod) void freezeAtPlayhead();
       else if (key === 'm' && !mod) void addMarker();
       else if (e.key === 'Delete' || e.key === 'Backspace') void deleteSelection(e.shiftKey);
       else if (e.key === 'ArrowLeft' && e.altKey) void nudgeSelection(-frame);

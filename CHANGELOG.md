@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Clip speed, reverse and freeze frames**: video and audio clips get `speed` (0.1–16, constant;
+  timeline duration = source span / speed) and `reverse`; video clips can be freeze frames
+  (`freeze: true`, a silent hold of the frame at `sourceStart`). New operations `set_speed`
+  (`keepDuration`, `ripple`) and `freeze_frame` (splits the clip at a time and inserts a hold,
+  rippling the track); `set_clip_props` accepts `speed`/`reverse`. Splits, trims, validation,
+  summaries, transcript/beat/scene mappings and the resolver follow the speed (`resolveFrame`
+  maps source times, reversed clips run backwards; `resolveAudioSegments` now carries `speed`,
+  `reverse` and `sourceEnd`). The browser engine retimes audio by resampling (pitch follows the
+  speed), plays reversed audio backwards and serves reversed video from a cached decode window;
+  the ffmpeg renderer uses `setpts`, frame-exact `reverse`/`areverse` on trimmed windows, chained
+  `atempo` and single-frame holds. New MCP tools `set_clip_speed` and `freeze_frame` (42 tools).
+  The editor has a Speed section (0.25×–4× presets, custom value, Reverse, Ripple), a Freeze frame
+  button (`F`) and speed/reverse/freeze badges on timeline clips.
 - **Suggestion mode for agent edits** ("pull requests for edits"): a per-project Agent
   _Direct / Suggest_ switch in the top bar (new `set_agent_mode` operation, stored as
   `settings.agentMode`). In suggest mode every agent edit becomes a proposal with a change

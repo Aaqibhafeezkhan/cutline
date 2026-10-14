@@ -6,11 +6,14 @@ import {
   IdSchema,
   TimeSchema,
   clipEnd,
+  clipSpeed,
   detectSilences,
   findAsset,
+  isReversed,
   mapSourceRangeToTimeline,
   projectDuration,
   round3,
+  sourceSpan,
   summarizeWaveform,
   timelineEnvelope,
   wordsToCues,
@@ -42,9 +45,10 @@ export async function timelineScenes(
       const asset = project.assets.find((a) => a.id === clip.assetId);
       if (!asset) continue;
       for (const s of await ctx.services.analysis.scenes(asset, threshold, signal)) {
-        if (s > clip.sourceStart + 0.05 && s < clip.sourceStart + clip.duration - 0.05) {
+        if (s > clip.sourceStart + 0.05 && s < clip.sourceStart + sourceSpan(clip) - 0.05) {
+          const offset = (s - clip.sourceStart) / clipSpeed(clip);
           scenes.push({
-            time: round3(clip.start + s - clip.sourceStart),
+            time: round3(clip.start + (isReversed(clip) ? clip.duration - offset : offset)),
             clipId: clip.id,
             sourceTime: round3(s),
           });

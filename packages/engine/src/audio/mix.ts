@@ -1,4 +1,4 @@
-import { gainAt, type AudioSegment } from '@cutline/core';
+import { gainAt, segmentSourceTime, segmentTimelineTime, type AudioSegment } from '@cutline/core';
 
 /** Decoded PCM: one Float32Array per channel, starting at `timestamp` (source seconds). */
 export interface PcmChunk {
@@ -26,17 +26,22 @@ export function mixChunk(
   const inLength = chunk.channels[0]?.length ?? 0;
   if (outLength === 0 || inLength === 0) return;
 
-  // Timeline span covered by this chunk.
-  const chunkStartTl = segment.timelineStart + (chunk.timestamp - segment.sourceStart);
-  const chunkEndTl = chunkStartTl + inLength / chunk.sampleRate;
-  const from = Math.max(outStart, segment.timelineStart, chunkStartTl);
-  const to = Math.min(outStart + outLength / outRate, segment.timelineEnd, chunkEndTl);
+  // Timeline span covered by this chunk (reversed segments play it backwards).
+  const a = segmentTimelineTime(segment, chunk.timestamp);
+  const b = segmentTimelineTime(segment, chunk.timestamp + inLength / chunk.sampleRate);
+  const from = Math.max(outStart, segment.timelineStart, Math.min(a, b));
+  const to = Math.min(outStart + outLength / outRate, segment.timelineEnd, Math.max(a, b));
   if (to <= from) return;
 
   const first = Math.max(0, Math.ceil((from - outStart) * outRate - 1e-9));
   const last = Math.min(outLength, Math.ceil((to - outStart) * outRate - 1e-9));
-  const ratio = chunk.sampleRate / outRate;
-  const inOffset = (outStart - chunkStartTl) * chunk.sampleRate;
+  // Input samples per output sample: speed resamples (pitch follows, like
+  // AudioBufferSourceNode.playbackRate), reverse walks backwards.
+  const ratio = ((segment.reverse ? -1 : 1) * segment.speed * chunk.sampleRate) / outRate;
+  // Backwards, the sample heard at source time s is the one ending at s.
+  const inOffset =
+    (segmentSourceTime(segment, outStart) - chunk.timestamp) * chunk.sampleRate -
+    (segment.reverse ? 1 : 0);
 
   for (let blockStart = first; blockStart < last; blockStart += GAIN_BLOCK) {
     const blockEnd = Math.min(last, blockStart + GAIN_BLOCK);
@@ -51,9 +56,10 @@ export function mixChunk(
       for (let j = blockStart; j < blockEnd; j++) {
         const pos = inOffset + j * ratio;
         const i = Math.floor(pos);
-        if (i < 0 || i >= inLength) continue;
-        const frac = pos - i;
-        const a = src[i]!;
+        // i = -1 happens at the start of a reversed chunk: hold its first sample (no gap).
+        if (i < -1 || i >= inLength) continue;
+        const frac = i < 0 ? 0 : pos - i;
+        const a = src[Math.max(0, i)]!;
         const b = i + 1 < inLength ? src[i + 1]! : a;
         dst[j]! += (a + (b - a) * frac) * gain;
       }
@@ -81,8 +87,7 @@ export function segmentsInWindow(segments: readonly AudioSegment[], start: numbe
 export function sourceWindow(segment: AudioSegment, start: number, end: number) {
   const from = Math.max(start, segment.timelineStart);
   const to = Math.min(end, segment.timelineEnd);
-  return {
-    from: segment.sourceStart + (from - segment.timelineStart),
-    to: segment.sourceStart + (to - segment.timelineStart),
-  };
+  const a = segmentSourceTime(segment, from);
+  const b = segmentSourceTime(segment, to);
+  return { from: Math.min(a, b), to: Math.max(a, b) };
 }

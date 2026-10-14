@@ -24,6 +24,7 @@ import type { OpOutcome } from './outcome';
 import { addCaptions, addShape, addText } from './overlays';
 import { assembleRanges } from './reel';
 import { OperationSchema, type OpOf, type Operation, type OperationType } from './schemas';
+import { freezeFrame, setSpeed } from './speed';
 import {
   addAsset,
   addTrack,
@@ -62,6 +63,8 @@ const HANDLERS: { [K in OperationType]: Handler<K> } = {
   duck_audio: duckAudio,
   set_brand: setBrand,
   add_logo: addLogo,
+  set_speed: setSpeed,
+  freeze_frame: freezeFrame,
   add_markers: addMarkers,
   update_marker: updateMarker,
   remove_markers: removeMarkers,

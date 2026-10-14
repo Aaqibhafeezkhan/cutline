@@ -12,6 +12,7 @@ import {
   MarkerKindSchema,
   ProjectSettingsSchema,
   ShapeKindSchema,
+  SpeedSchema,
   TimeSchema,
   TrackKindSchema,
   TransitionSchema,
@@ -80,6 +81,10 @@ export const ClipPropsPatchSchema = z
     fadeOut: z.number().min(0).max(60),
     volume: z.number().min(0).max(4),
     muted: z.boolean(),
+    speed: SpeedSchema.describe(
+      'Playback speed 0.1–16 (video/audio); the duration follows (source span / speed)',
+    ),
+    reverse: z.boolean().describe('Play the clip backwards (video/audio)'),
     text: z.string().min(1).max(2000),
     style: TextStylePatchSchema,
     words: z.array(WordSchema).max(500).describe('Caption word timings, clip-relative seconds'),
@@ -410,6 +415,37 @@ export const DuckAudioOpSchema = z.object({
     .describe('Seconds to ramp back up after each range (default 0.4)'),
 });
 
+export const SetSpeedOpSchema = z
+  .object({
+    type: z.literal('set_speed'),
+    clipId: IdSchema,
+    speed: SpeedSchema.optional().describe(
+      'Playback speed 0.1–16: 0.5 = half speed (slow motion), 2 = twice as fast',
+    ),
+    reverse: z.boolean().optional().describe('true plays the clip backwards, false forwards'),
+    keepDuration: z
+      .boolean()
+      .default(false)
+      .describe(
+        'false (default): keep the source material, the clip gets shorter/longer. true: keep the timeline length and use more/less source',
+      ),
+    ripple: z
+      .boolean()
+      .default(false)
+      .describe('Shift later clips on the track when the duration changes'),
+  })
+  .refine((o) => o.speed !== undefined || o.reverse !== undefined, {
+    message: 'give speed and/or reverse',
+  });
+
+export const FreezeFrameOpSchema = z.object({
+  type: z.literal('freeze_frame'),
+  clipId: IdSchema.describe('Video clip to take the frame from'),
+  time: TimeSchema.describe('Timeline time of the frame; the clip is split there'),
+  duration: DurationSchema.max(600).default(2).describe('Seconds to hold the frame (default 2)'),
+  newClipId: IdSchema.optional().describe('Id for the freeze-frame clip'),
+});
+
 export const MarkerInputSchema = z
   .object({
     time: TimeSchema.describe('Timeline time in seconds'),
@@ -519,6 +555,8 @@ export const OperationSchema = z.discriminatedUnion('type', [
   DuckAudioOpSchema,
   SetBrandOpSchema,
   AddLogoOpSchema,
+  SetSpeedOpSchema,
+  FreezeFrameOpSchema,
   AddMarkersOpSchema,
   UpdateMarkerOpSchema,
   RemoveMarkersOpSchema,

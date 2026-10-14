@@ -1,6 +1,7 @@
 import {
   TEMPLATE_LABELS,
   clipEnd,
+  isFreeze,
   randomId,
   templateOperations,
   type MarkerKind,
@@ -33,6 +34,34 @@ export async function splitAtPlayhead(): Promise<void> {
     targets.map((c) => ({ type: 'split_clip', clipId: c.id, time: t })),
     `Split ${targets.length} clip(s)`,
   );
+}
+
+/**
+ * Holds the frame under the playhead for 2 s: uses the selected video clip,
+ * else the topmost visible video clip there (dispatches freeze_frame).
+ */
+export async function freezeAtPlayhead(): Promise<void> {
+  const { project, selection, dispatch, select } = useEditor.getState();
+  if (!project) return;
+  const t = currentTime();
+  const candidates = [...project.tracks]
+    .reverse()
+    .filter((tr) => tr.kind === 'video' && !tr.locked && !tr.hidden)
+    .flatMap((tr) => tr.clips)
+    .filter((c) => c.type === 'video' && !isFreeze(c) && c.start <= t && clipEnd(c) - EPS > t);
+  const target = candidates.find((c) => selection.includes(c.id)) ?? candidates[0];
+  if (!target) {
+    toast.message('No video clip under the playhead to freeze.');
+    return;
+  }
+  if (!(await dispatch([{ type: 'freeze_frame', clipId: target.id, time: t }], 'Freeze frame')))
+    return;
+  const { project: next, activity } = useEditor.getState();
+  const affected = new Set(activity[0]?.affectedIds ?? []);
+  const hold = next?.tracks
+    .flatMap((tr) => tr.clips)
+    .find((c) => affected.has(c.id) && isFreeze(c));
+  if (hold) select([hold.id]);
 }
 
 export async function deleteSelection(ripple: boolean): Promise<void> {

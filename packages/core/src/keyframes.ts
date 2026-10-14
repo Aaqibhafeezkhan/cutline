@@ -101,6 +101,15 @@ export function sliceAllKeyframes(
   return any ? out : undefined;
 }
 
+/** Stretches all keyframe times by `factor` (used when a speed change rescales a clip). */
+export function scaleKeyframes(keyframes: Keyframes, factor: number): Keyframes {
+  const out: Keyframes = {};
+  for (const [prop, list] of Object.entries(keyframes) as Array<[AnimatableProperty, Keyframe[]]>) {
+    out[prop] = list.map((k) => ({ ...k, time: roundTime(k.time * factor) }));
+  }
+  return out;
+}
+
 /** Static value, overridden by keyframes when the property is animated. */
 export function animatedValue(
   keyframes: Keyframes | undefined,

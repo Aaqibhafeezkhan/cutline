@@ -1,6 +1,6 @@
 import { memo, useEffect, useState, type PointerEvent } from 'react';
 import { Bot, Lock } from 'lucide-react';
-import { clipEnd, type Clip, type Track } from '@cutline/core';
+import { clipEnd, clipSpeed, isFreeze, isReversed, type Clip, type Track } from '@cutline/core';
 import type { BeatInfo } from '@/lib/api';
 import { useBeats } from '@/lib/beats';
 import { HIGHLIGHT_MS, useEditor } from '@/lib/store';
@@ -40,6 +40,16 @@ function label(clip: Clip, assetName: string | undefined): string {
   return clip.name ?? assetName ?? clip.type;
 }
 
+/** "2×", "◀ reverse", "0.5× ◀ reverse" or "❄ freeze" for retimed clips. */
+export function speedBadge(clip: Clip): string | null {
+  if (isFreeze(clip)) return '❄ freeze';
+  const parts: string[] = [];
+  const speed = clipSpeed(clip);
+  if (speed !== 1) parts.push(`${Number(speed.toFixed(2))}×`);
+  if (isReversed(clip)) parts.push('◀ reverse');
+  return parts.length ? parts.join(' ') : null;
+}
+
 export const ClipView = memo(function ClipView({
   clip,
   track,
@@ -64,6 +74,7 @@ export const ClipView = memo(function ClipView({
   const proposed = useEditor((s) => s.preview?.affectedIds.includes(clip.id) ?? false);
   const width = Math.max(2, clip.duration * zoom);
   const text = label(clip, assetName);
+  const badge = speedBadge(clip);
   const height = TRACK_HEIGHT[track.kind] - 6;
 
   const start = (kind: DragKind) => (e: PointerEvent) => {
@@ -115,6 +126,14 @@ export const ClipView = memo(function ClipView({
         )}
         <span className="truncate font-medium leading-tight">{text}</span>
       </div>
+      {badge && (
+        <span
+          data-speed-badge
+          className="pointer-events-none absolute bottom-0.5 left-1.5 rounded bg-black/40 px-1 text-[9px] font-semibold leading-tight"
+        >
+          {badge}
+        </span>
+      )}
       {'muted' in clip && clip.muted && (
         <span className="pointer-events-none absolute bottom-0.5 right-1 text-[9px] uppercase opacity-70">
           muted

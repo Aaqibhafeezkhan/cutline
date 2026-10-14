@@ -242,9 +242,19 @@ const audible = {
   duck: DuckingSchema.optional(),
 };
 
+export const SpeedSchema = z
+  .number()
+  .min(0.1)
+  .max(16)
+  .describe('Playback speed: 0.1–16, 1 = normal, 2 = twice as fast (timeline = source / speed)');
+
 const media = {
   assetId: IdSchema,
-  sourceStart: TimeSchema.default(0).describe('In-point within the asset, seconds'),
+  sourceStart: TimeSchema.default(0).describe(
+    'Lowest source time used, seconds (the in-point; for reversed clips the last frame shown)',
+  ),
+  speed: SpeedSchema.optional().describe('Playback speed (absent = 1)'),
+  reverse: z.boolean().optional().describe('Play the source window backwards'),
 };
 
 export const VideoClipSchema = z.object({
@@ -253,6 +263,10 @@ export const VideoClipSchema = z.object({
   ...media,
   ...visual,
   ...audible,
+  freeze: z
+    .boolean()
+    .optional()
+    .describe('Freeze frame: holds the frame at sourceStart for the whole clip, silent'),
 });
 
 export const AudioClipSchema = z.object({

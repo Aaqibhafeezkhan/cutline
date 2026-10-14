@@ -1,4 +1,5 @@
 import { animationAt, type FrameSize } from './animation';
+import { clipSpeed, isFreeze, isReversed, sourceTimeAt } from './clipmath';
 import { duckBreakpoints, duckGain } from './ducking';
 import { animatedValue } from './keyframes';
 import { ADJACENT_TOLERANCE, previousAdjacent } from './queries';
@@ -60,6 +61,9 @@ export interface FrameDescription {
 }
 
 const DEFAULT_CAPTION_STYLE = CaptionStyleSchema.parse({});
+
+/** Seconds subtracted from reversed source times so frame lookup picks the earlier frame. */
+export const REVERSE_NUDGE = 1e-4;
 
 function nextAdjacent<C extends Clip>(track: { clips: readonly C[] }, clip: Clip): C | undefined {
   const end = clipEnd(clip);
@@ -172,7 +176,10 @@ function visualLayer(
     if (clip.type === 'video') {
       const asset = assets.get(clip.assetId);
       const max = asset?.duration ?? Infinity;
-      layer.sourceTime = clamp(clip.sourceStart + local, 0, max);
+      // Reversed clips show the frame *ending* at the mapped time, matching a
+      // frame-exact reverse of the source window (no frame from past its end).
+      const nudge = isReversed(clip) ? REVERSE_NUDGE : 0;
+      layer.sourceTime = clamp(sourceTimeAt(clip, local) - nudge, 0, max);
     }
   }
   return layer;
@@ -234,10 +241,31 @@ export interface AudioSegment {
   /** Timeline range during which this segment is audible. */
   timelineStart: number;
   timelineEnd: number;
-  /** Source time at `timelineStart`. */
+  /**
+   * Lowest source time used. Forward segments play [sourceStart, sourceEnd]
+   * from `timelineStart`; reversed segments play it backwards from sourceEnd.
+   */
   sourceStart: number;
+  /** Highest source time used: sourceStart + (timelineEnd - timelineStart) × speed. */
+  sourceEnd: number;
+  /** Source seconds per timeline second (pitch follows: no time stretching). */
+  speed: number;
+  /** Plays the source window backwards. */
+  reverse: boolean;
   /** Piecewise-linear gain envelope in timeline time (constant outside). */
   gain: GainPoint[];
+}
+
+/** Source time heard at timeline time `t` of a segment. */
+export function segmentSourceTime(seg: AudioSegment, t: number): number {
+  const d = (t - seg.timelineStart) * seg.speed;
+  return seg.reverse ? seg.sourceEnd - d : seg.sourceStart + d;
+}
+
+/** Timeline time at which source time `source` of a segment is heard. */
+export function segmentTimelineTime(seg: AudioSegment, source: number): number {
+  const d = seg.reverse ? seg.sourceEnd - source : source - seg.sourceStart;
+  return seg.timelineStart + d / seg.speed;
 }
 
 /** Linear interpolation of a gain envelope at timeline time t. */
@@ -264,9 +292,11 @@ export function resolveAudioSegments(project: Project): AudioSegment[] {
     if (track.muted || track.kind === 'caption') continue;
     for (const clip of track.clips) {
       if (clip.type !== 'video' && clip.type !== 'audio') continue;
-      if (clip.muted) continue;
+      if (clip.muted || isFreeze(clip)) continue;
       const asset = assets.get(clip.assetId);
       if (!asset?.hasAudio) continue;
+      const speed = clipSpeed(clip);
+      const reverse = isReversed(clip);
 
       let from = clip.start;
       let to = clipEnd(clip);
@@ -277,9 +307,14 @@ export function resolveAudioSegments(project: Project): AudioSegment[] {
       const next = nextAdjacent(track, clip);
       const nin = next?.type === 'video' ? next.transitionIn : undefined;
       if (nin && nin.type === 'crossfade') to = clipEnd(clip) + nin.duration / 2;
-      from = Math.max(from, clip.start - clip.sourceStart); // cannot pre-roll before the asset start
-      // Audible assets always have a duration (enforced by validation).
-      to = Math.min(to, clip.start - clip.sourceStart + asset.duration!);
+      // Handles cannot reach outside the asset. Audible assets always have a
+      // duration (enforced by validation).
+      const head = clip.sourceStart / speed; // timeline seconds of source before the in-point
+      const tail = (asset.duration! - clip.sourceStart) / speed; // ... from the in-point on
+      const lo = reverse ? clip.duration - tail : -head;
+      const hi = reverse ? clip.duration + head : tail;
+      from = Math.max(from, clip.start + lo);
+      to = Math.min(to, clip.start + hi);
 
       const gainFn = (t: number) => {
         const local = clamp(t - clip.start, 0, clip.duration);
@@ -326,13 +361,18 @@ export function resolveAudioSegments(project: Project): AudioSegment[] {
         time,
         gain: gainFn(time === to ? to - 1e-6 : time),
       }));
+      const a = sourceTimeAt(clip, from - clip.start);
+      const b = sourceTimeAt(clip, to - clip.start);
       segments.push({
         clipId: clip.id,
         trackId: track.id,
         assetId: clip.assetId,
         timelineStart: from,
         timelineEnd: to,
-        sourceStart: clip.sourceStart + (from - clip.start),
+        sourceStart: Math.min(a, b),
+        sourceEnd: Math.max(a, b),
+        speed,
+        reverse,
         gain,
       });
     }

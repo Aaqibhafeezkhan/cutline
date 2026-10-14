@@ -11,18 +11,22 @@ import {
   DurationSchema,
   IdSchema,
   OperationSchema,
+  SpeedSchema,
   TEMPLATE_LABELS,
   TemplateParamsSchema,
   TextStylePatchSchema,
   TimeSchema,
   TransformPatchSchema,
   agentModeOf,
+  clipEnd,
   findPhraseInWords,
+  isFreeze,
   round3,
   summarizeProject,
   templateOperations,
   wordRangesToCuts,
   wordsToCues,
+  type Project,
   type Word,
   type WordSelection,
 } from '@cutline/core';
@@ -40,6 +44,20 @@ const placement = z
   .describe(
     'If the range is occupied: "error" (default), "overwrite" existing material, or "insert" (push later clips right)',
   );
+
+/** Topmost visible, non-frozen video clip at timeline time `t`. */
+function videoClipAt(project: Project, t: number): string {
+  for (const track of [...project.tracks].reverse()) {
+    if (track.kind !== 'video' || track.hidden) continue;
+    const hit = track.clips.find(
+      (c) => c.type === 'video' && !isFreeze(c) && t >= c.start && t < clipEnd(c),
+    );
+    if (hit) return hit.id;
+  }
+  throw new CutlineError('NOT_FOUND', `No video clip plays at ${t}s.`, {
+    hint: 'Pass a time inside a video clip, or give clipId explicitly (see get_project).',
+  });
+}
 
 export function registerEditingTools(server: McpServer, ctx: ToolContext): void {
   const { docs, assets } = ctx.services;
@@ -567,7 +585,7 @@ export function registerEditingTools(server: McpServer, ctx: ToolContext): void 
     {
       title: 'Set clip properties',
       description:
-        'Change clip properties: transform {x, y (px offset from center), scale, rotation (deg), opacity 0..1}, effects {brightness, contrast, saturation (-1..1), blur (px); null removes}, keyframes per property (clip-relative seconds; [] removes), fadeIn/fadeOut (s), volume/muted, text and style for text clips, words for captions, transitionIn, animationIn/animationOut ({preset, duration}; null removes; see animate_clip). Only the fields you pass are changed.',
+        'Change clip properties: transform {x, y (px offset from center), scale, rotation (deg), opacity 0..1}, effects {brightness, contrast, saturation (-1..1), blur (px); null removes}, keyframes per property (clip-relative seconds; [] removes), fadeIn/fadeOut (s), volume/muted, speed/reverse for video and audio (see set_clip_speed), text and style for text clips, words for captions, transitionIn, animationIn/animationOut ({preset, duration}; null removes; see animate_clip). Only the fields you pass are changed.',
       inputSchema: z.object({ projectId, clipId: IdSchema, props: ClipPropsPatchSchema }),
     },
     guard(async (args) => {
@@ -575,6 +593,73 @@ export function registerEditingTools(server: McpServer, ctx: ToolContext): void 
         { type: 'set_clip_props', clipId: args.clipId, props: args.props },
       ]);
       return ok(result.summary, editPayload(id, result));
+    }),
+  );
+
+  server.registerTool(
+    'set_clip_speed',
+    {
+      title: 'Set clip speed / reverse',
+      description:
+        'Change the playback speed of a video or audio clip (0.1–16: 0.5 = slow motion, 2 = twice as fast; constant speed, no ramps) and/or play it backwards (reverse). By default the clip keeps its source material, so its timeline length becomes source length / speed (a 10 s clip at 2× lasts 5 s); keepDuration=true keeps the timeline length and uses more/less source instead. When a slower clip would run into the next clip, pass ripple=true to push later clips on the track (shrinking with ripple=true pulls them in). Sped-up audio keeps its pitch in server renders (atempo) but changes pitch in the browser preview. Images, text and shapes have no speed: use trim_clip.',
+      inputSchema: z
+        .object({
+          projectId,
+          clipId: IdSchema,
+          speed: SpeedSchema.optional().describe('0.1–16, 1 = normal speed'),
+          reverse: z.boolean().optional().describe('true = backwards, false = forwards'),
+          keepDuration: z
+            .boolean()
+            .optional()
+            .describe('Keep the timeline length instead of the source material (default false)'),
+          ripple: z
+            .boolean()
+            .optional()
+            .describe('Shift later clips on the track when the length changes (default false)'),
+        })
+        .refine((a) => a.speed !== undefined || a.reverse !== undefined, {
+          message: 'Give speed and/or reverse.',
+        }),
+    },
+    guard(async (args) => {
+      const { id, result } = await edit(args.projectId, [
+        { type: 'set_speed', ...args, projectId: undefined },
+      ]);
+      return ok(result.summary, editPayload(id, result));
+    }),
+  );
+
+  server.registerTool(
+    'freeze_frame',
+    {
+      title: 'Freeze frame',
+      description:
+        'Hold the video frame shown at a timeline time for a few seconds: the clip is split at `time`, a silent freeze-frame clip is inserted there, and the rest of the clip plus all later clips on that track move later by `duration` (other tracks are not moved). Omit clipId to use the topmost visible video clip at that time. The freeze frame can be trimmed, moved, faded or animated like any clip. Returns its id as freezeClipId.',
+      inputSchema: z.object({
+        projectId,
+        clipId: IdSchema.optional().describe(
+          'Video clip to freeze (default: topmost visible video clip at `time`)',
+        ),
+        time: TimeSchema.describe('Timeline time of the frame to hold'),
+        duration: z.number().positive().max(600).optional().describe('Seconds to hold (default 2)'),
+      }),
+    },
+    guard(async (args) => {
+      const id = await ctx.projectId(args.projectId);
+      let clipId = args.clipId;
+      if (!clipId) {
+        const { project } = await docs.get(id);
+        clipId = videoClipAt(project, args.time);
+      }
+      const result = await docs.apply(
+        id,
+        [{ type: 'freeze_frame', clipId, time: args.time, duration: args.duration }],
+        ctx.origin(),
+      );
+      return ok(result.summary, {
+        ...editPayload(id, result),
+        freezeClipId: result.createdIds[0],
+      });
     }),
   );
 
