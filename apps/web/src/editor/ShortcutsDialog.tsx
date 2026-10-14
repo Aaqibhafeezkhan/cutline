@@ -18,6 +18,7 @@ export const SHORTCUTS: Array<[string[], string]> = [
   [['+', '−'], 'Zoom timeline in / out'],
   [['Ctrl', 'A'], 'Select all clips'],
   [['Esc'], 'Clear selection'],
+  [['Ctrl', 'K'], 'Open / close the chat with Claude'],
   [['?'], 'Show this help'],
 ];
 

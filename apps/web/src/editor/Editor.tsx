@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { projectDuration } from '@cutline/core';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/misc';
@@ -18,6 +18,7 @@ import {
   splitAtPlayhead,
 } from './commands';
 import { BrandKitDialog } from './BrandKitDialog';
+import { ChatPanel } from './ChatPanel';
 import { ConnectDialog } from './ConnectDialog';
 import { ExportDialog } from './ExportDialog';
 import { Preview } from './Preview';
@@ -27,7 +28,17 @@ import { Timeline } from './timeline/Timeline';
 import { TopBar } from './TopBar';
 import { TranscriptPanel } from './TranscriptPanel';
 
-function useShortcuts(openHelp: () => void) {
+const CHAT_OPEN_KEY = 'cutline.chatOpen';
+
+function initialChatOpen(): boolean {
+  try {
+    return localStorage.getItem(CHAT_OPEN_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function useShortcuts(openHelp: () => void, toggleChat: () => void) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (isTypingTarget(e.target) || document.querySelector('[role="dialog"]')) return;
@@ -41,6 +52,7 @@ function useShortcuts(openHelp: () => void) {
       if (mod && key === 'z') (e.shiftKey ? redo : undo)();
       else if (mod && key === 'y') redo();
       else if (mod && key === 'a') selectAll();
+      else if (mod && key === 'k') toggleChat();
       else if (e.key === ' ') togglePlay();
       else if (key === 's' && !mod) void splitAtPlayhead();
       else if (key === 't' && !mod) void addText();
@@ -61,7 +73,7 @@ function useShortcuts(openHelp: () => void) {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [openHelp]);
+  }, [openHelp, toggleChat]);
 }
 
 export function Editor({ projectId }: { projectId: string }) {
@@ -71,6 +83,18 @@ export function Editor({ projectId }: { projectId: string }) {
   const [connectOpen, setConnectOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [brandOpen, setBrandOpen] = useState(false);
+  const [chatOpen, setChatOpen] = useState(initialChatOpen);
+  const toggleChat = useCallback(() => {
+    setChatOpen((open) => {
+      try {
+        localStorage.setItem(CHAT_OPEN_KEY, open ? '0' : '1');
+      } catch {
+        // storage unavailable: the panel state lives for this page only
+      }
+      return !open;
+    });
+  }, []);
+  const openHelp = useCallback(() => setHelpOpen(true), []);
 
   useEffect(() => {
     useEditor.getState().open(projectId);
@@ -81,7 +105,7 @@ export function Editor({ projectId }: { projectId: string }) {
     if (project) document.title = `${project.name} · Cutline`;
   }, [project]);
 
-  useShortcuts(() => setHelpOpen(true));
+  useShortcuts(openHelp, toggleChat);
 
   if (!project) {
     return (
@@ -102,8 +126,16 @@ export function Editor({ projectId }: { projectId: string }) {
         onConnect={() => setConnectOpen(true)}
         onShortcuts={() => setHelpOpen(true)}
         onBrand={() => setBrandOpen(true)}
+        chatOpen={chatOpen}
+        onChat={toggleChat}
       />
-      <div className="grid min-h-0 grid-cols-[260px_minmax(0,1fr)_300px]">
+      <div
+        className={
+          chatOpen
+            ? 'grid min-h-0 grid-cols-[240px_minmax(0,1fr)_280px_340px]'
+            : 'grid min-h-0 grid-cols-[260px_minmax(0,1fr)_300px]'
+        }
+      >
         <aside className="min-h-0 border-r border-border bg-surface">
           <AssetBin />
         </aside>
@@ -136,6 +168,11 @@ export function Editor({ projectId }: { projectId: string }) {
             </TabsContent>
           </Tabs>
         </aside>
+        {chatOpen && (
+          <aside className="min-h-0 border-l border-border bg-surface">
+            <ChatPanel projectId={projectId} onClose={toggleChat} />
+          </aside>
+        )}
       </div>
       <div className="min-h-0 min-w-0 border-t border-border">
         <Timeline />

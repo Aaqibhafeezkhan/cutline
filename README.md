@@ -133,6 +133,32 @@ More options (tokens, Docker, other clients) are in
 [docs/connect-claude.md](docs/connect-claude.md). No agent at hand? Run the scripted demo agent:
 `pnpm --filter @cutline/mcp-server demo -- /absolute/path/to/video-with-speech.mp4`.
 
+## Chat in the editor
+
+You can also talk to Claude without any MCP client: click **Chat** in the editor's toolbar (or
+press `Ctrl+K`) and type something like "Make this a 30-second short". The Cutline server runs the
+conversation with the [Anthropic API](https://docs.claude.com/) and the same tools Claude Desktop
+gets, scoped to the open project. Edits appear live on the timeline (highlighted as agent changes),
+tool calls show up as chips in the chat, **Stop** cancels a reply, and `Ctrl+Z` undoes anything
+Claude did.
+
+Setup: put your Anthropic API key into the **server** environment, e.g. in `.env` at the repository
+root, and restart the server:
+
+```bash
+ANTHROPIC_API_KEY=sk-ant-...
+# optional
+CUTLINE_CHAT_MODEL=claude-opus-5-5   # default
+CUTLINE_CHAT_EFFORT=medium           # low | medium | high | xhigh | max | default
+```
+
+The key is read only by the server; it is never sent to the browser, logged or written to project
+files. Without it the chat panel stays visible but explains how to enable it. Usage is billed to
+your Anthropic account. Conversations live in server memory (one per project; "New chat" starts
+over) and each message may run at most 20 tool calls. The chat endpoint
+(`POST /api/projects/:id/chat`, server-sent events) uses the same Host/Origin/token checks as the
+rest of the API.
+
 ## How it works
 
 ```mermaid
