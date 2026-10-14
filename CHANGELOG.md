@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Chat with Claude inside the editor**: a collapsible Chat panel (toolbar button or `Ctrl+K`)
+  where you can type "Make this a 30-second short" without Claude Desktop. The server runs an agent
+  loop with the official Anthropic TypeScript SDK (`@anthropic-ai/sdk`) over the existing MCP tools,
+  called in-process and scoped to the open project, so every edit is a normal operation: it shows up
+  live with the agent highlight and `Ctrl+Z` undoes it. Replies stream over
+  `POST /api/projects/:id/chat` (server-sent events) with text, tool-call chips, errors, a Stop
+  button and "New chat"; `get_frames` images are passed to the model so it can look at the video.
+  At most 20 tool calls per message. Enable it by setting `ANTHROPIC_API_KEY` in the server
+  environment (it never reaches the browser); `CUTLINE_CHAT_MODEL` (default `claude-opus-5-5`) and
+  `CUTLINE_CHAT_EFFORT` (default `medium`) tune it. Without a key the panel explains how to enable it.
+
 ## [0.3.0] - 2026-10-13
 
 Audio and branding: remove filler words, detect beats and cut on the beat, duck music under

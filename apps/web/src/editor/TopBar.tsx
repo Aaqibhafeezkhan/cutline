@@ -3,6 +3,7 @@ import {
   Bot,
   Download,
   Keyboard,
+  MessageSquare,
   Palette,
   Plug,
   Redo2,
@@ -38,11 +39,15 @@ export function TopBar({
   onConnect,
   onShortcuts,
   onBrand,
+  chatOpen,
+  onChat,
 }: {
   onExport: () => void;
   onConnect: () => void;
   onShortcuts: () => void;
   onBrand: () => void;
+  chatOpen: boolean;
+  onChat: () => void;
 }) {
   const project = useEditor((s) => s.project);
   const history = useEditor((s) => s.history);
@@ -160,6 +165,17 @@ export function TopBar({
           <Button variant="ghost" size="sm" aria-label="Brand kit" onClick={onBrand}>
             <Palette />
             <BrandSwatches />
+          </Button>
+        </Tooltip>
+        <Tooltip content="Chat with Claude inside the editor (Ctrl+K)">
+          <Button
+            variant={chatOpen ? 'outline' : 'ghost'}
+            size="sm"
+            aria-label="Chat"
+            aria-pressed={chatOpen}
+            onClick={onChat}
+          >
+            <MessageSquare /> Chat
           </Button>
         </Tooltip>
         <Button variant="secondary" size="sm" onClick={onConnect}>
