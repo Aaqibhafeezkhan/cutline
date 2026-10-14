@@ -19,6 +19,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   At most 20 tool calls per message. Enable it by setting `ANTHROPIC_API_KEY` in the server
   environment (it never reaches the browser); `CUTLINE_CHAT_MODEL` (default `claude-opus-5-5`) and
   `CUTLINE_CHAT_EFFORT` (default `medium`) tune it. Without a key the panel explains how to enable it.
+- **Transcript editing**: edit the video by editing its transcript. The editor's new Transcript
+  panel shows the timeline's words as text (paragraphs at pauses), highlights the word being
+  spoken and seeks on click. Select words (drag, Shift+click or Shift+arrow keys) and press
+  Delete/Backspace to cut exactly those words out of all unlocked tracks with one ripple
+  `delete_range` (one undo step); the right-click menu also offers "Remove fillers". The new MCP
+  tool `delete_words` does the same for agents, by exact phrase (`text`, with `occurrence` or
+  `all`) or by word index range, with `dryRun`. Core exports the pure helpers
+  `wordRangesToCuts`, `findPhraseInWords` and `groupParagraphs`; the server adds a
+  `POST /api/projects/:id/transcript` route that returns cached (or freshly transcribed) per-asset
+  words. The MCP server now exposes 34 tools.
 
 ## [0.3.0] - 2026-10-13
 
