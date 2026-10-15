@@ -1,4 +1,5 @@
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
+import opentype from 'opentype.js';
 
 type Variant = 'regular' | 'bold' | 'italic' | 'boldItalic';
 type Family = 'sans' | 'serif' | 'mono';
@@ -115,4 +116,41 @@ export function resolveFontFile(
     cache.set(key, found ?? fallback);
   }
   return cache.get(key);
+}
+
+const fontObjectCache = new Map<string, opentype.Font | null>();
+
+/** Loads and parses a font file (cached in memory). */
+export function loadFontFile(filePath: string): opentype.Font | null {
+  if (fontObjectCache.has(filePath)) {
+    return fontObjectCache.get(filePath) ?? null;
+  }
+  try {
+    const buf = readFileSync(filePath);
+    const font = opentype.parse(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength));
+    fontObjectCache.set(filePath, font);
+    return font;
+  } catch {
+    fontObjectCache.set(filePath, null);
+    return null;
+  }
+}
+
+/**
+ * Returns a text measuring function using the actual font metrics from
+ * opentype.js when a font file is available, or an estimated glyph width fallback.
+ */
+export function createFontMeasure(
+  fontFilePath: string | undefined,
+  fontSize: number,
+  bold = false,
+): (text: string) => number {
+  if (fontFilePath) {
+    const font = loadFontFile(fontFilePath);
+    if (font) {
+      return (text: string) => font.getAdvanceWidth(text, fontSize);
+    }
+  }
+  const charW = fontSize * (bold ? 0.58 : 0.52);
+  return (text: string) => text.length * charW;
 }
