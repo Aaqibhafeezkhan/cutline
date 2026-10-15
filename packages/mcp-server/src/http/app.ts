@@ -324,7 +324,11 @@ export function createApp(services: Services): AppHandle {
         (await docs.get(param(req, 'id'))).project,
         param(req, 'assetId'),
       );
-      res.json({ envelope: await services.analysis.envelope(asset) });
+      const full = await services.analysis.envelope(asset);
+      // Only peak is needed for waveform rendering; omitting rms halves payload size.
+      const envelope = { windowSec: full.windowSec, peak: full.peak };
+      res.setHeader('Cache-Control', 'private, max-age=31536000, immutable');
+      res.json({ envelope });
     }),
   );
 

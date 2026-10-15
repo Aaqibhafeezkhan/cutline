@@ -86,7 +86,7 @@ export const ClipView = memo(function ClipView({
       aria-label={`${clip.type} clip ${text}, ${clip.start.toFixed(2)} to ${clipEnd(clip).toFixed(2)} seconds${track.locked ? ', locked' : ''}`}
       data-clip-id={clip.id}
       className={cn(
-        'group absolute top-[3px] overflow-hidden rounded-md text-[11px] text-white/95 shadow-sm outline-offset-1 transition-[box-shadow,opacity]',
+        'group absolute top-[3px] isolate overflow-hidden rounded-md text-[11px] text-white/95 shadow-sm outline-offset-1 transition-[box-shadow,opacity]',
         COLORS[clip.type],
         selected && 'ring-2 ring-white',
         highlight && 'agent-highlight',
@@ -119,7 +119,7 @@ export const ClipView = memo(function ClipView({
           zoom={zoom}
         />
       )}
-      <div className="pointer-events-none relative z-10 flex h-full items-start gap-1 px-1.5 py-1">
+      <div className="pointer-events-none flex h-full items-start gap-1 px-1.5 py-1">
         {track.locked && <Lock className="size-3 shrink-0 opacity-70" />}
         {highlight && (
           <Bot
@@ -194,13 +194,21 @@ function ClipWaveform({
     const peaks = sampleWaveform(envelope, sourceStart, duration, sampleWidth);
     const center = height / 2;
     const maxHalfHeight = height * 0.38;
+    // dB scale: map linear 0..1 → dBFS → 0..1 over −48…0 dBFS range so
+    // moderate-level audio (e.g. −18 dBFS) is clearly visible.
+    const DB_FLOOR = -48;
+    const toDbNorm = (linear: number) => {
+      if (linear <= 0) return 0;
+      const db = 20 * Math.log10(linear);
+      return Math.max(0, Math.min(1, (db - DB_FLOOR) / -DB_FLOOR));
+    };
     context.beginPath();
     context.strokeStyle = 'rgba(255, 255, 255, 0.62)';
     context.lineWidth = 1;
     for (let x = 0; x < peaks.length; x++) {
       const peak = peaks[x] ?? 0;
       if (peak <= 0) continue;
-      const amplitude = Math.max(0.6, peak * maxHalfHeight);
+      const amplitude = Math.max(0.6, toDbNorm(peak) * maxHalfHeight);
       context.moveTo(x + 0.5, center - amplitude);
       context.lineTo(x + 0.5, center + amplitude);
     }
