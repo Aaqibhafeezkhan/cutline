@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Pause, Play, SkipBack, SkipForward } from 'lucide-react';
+import { Eye, Pause, Play, SkipBack, SkipForward } from 'lucide-react';
 import { projectDuration } from '@cutline/core';
 import { Player } from '@cutline/engine';
 import { Button } from '@/components/ui/button';
@@ -18,6 +18,11 @@ export function Preview() {
   const draftRef = useRef<DraftFn | null>(null);
   const project = useEditor((s) => s.project);
   const projectId = useEditor((s) => s.projectId);
+  const previewed = useEditor((s) => s.preview?.project ?? null);
+  const previewLabel = useEditor(
+    (s) => s.proposals.find((p) => p.id === s.preview?.id)?.label ?? null,
+  );
+  const togglePreview = useEditor((s) => s.togglePreview);
   const [error, setError] = useState<string | null>(null);
   const playing = usePlayhead((s) => s.playing);
   const time = usePlayhead((s) => s.time);
@@ -71,23 +76,42 @@ export function Preview() {
 
   useEffect(() => {
     const draft = draftRef.current;
-    if (project) playerRef.current?.setProject(draft ? draft(project) : project);
-  }, [project]);
+    // A previewed agent proposal replaces the live document until it is closed.
+    const shown = previewed ?? project;
+    if (shown) playerRef.current?.setProject(draft ? draft(shown) : shown);
+  }, [project, previewed]);
 
   const setDraft = useCallback((draft: DraftFn | null, render = true) => {
     draftRef.current = draft;
-    const current = useEditor.getState().project;
-    if (render && current) playerRef.current?.setProject(draft ? draft(current) : current);
+    const { project: current, preview: p } = useEditor.getState();
+    const shown = p?.project ?? current;
+    if (render && shown) playerRef.current?.setProject(draft ? draft(shown) : shown);
   }, []);
 
-  const duration = project ? projectDuration(project) : 0;
+  const shownProject = previewed ?? project;
+  const duration = shownProject ? projectDuration(shownProject) : 0;
 
   return (
     <section aria-label="Preview" className="flex h-full min-h-0 flex-col bg-black/40">
       <div className="min-h-0 flex-1 p-3">
         <div className="relative h-full w-full">
           <div ref={host} className="h-full w-full" />
-          <CanvasOverlay player={player} setDraft={setDraft} />
+          {previewed ? (
+            <div
+              role="status"
+              className="absolute inset-x-2 top-2 flex items-center gap-2 rounded-md border border-agent/60 bg-surface/95 px-2 py-1 text-xs shadow"
+            >
+              <Eye className="size-3.5 shrink-0 text-agent" aria-hidden />
+              <span className="min-w-0 flex-1 truncate">
+                Previewing suggestion: <span className="text-agent">{previewLabel}</span>
+              </span>
+              <Button variant="ghost" size="sm" onClick={() => togglePreview(null)}>
+                Close preview
+              </Button>
+            </div>
+          ) : (
+            <CanvasOverlay player={player} setDraft={setDraft} />
+          )}
           {error && (
             <div
               role="alert"

@@ -54,6 +54,12 @@ export const BrandSchema = z.object({
   logoPosition: LogoPositionSchema.optional().describe('Corner for the logo (default top-right)'),
 });
 
+/**
+ * How edits from AI agents are handled: applied right away ("direct") or
+ * collected as proposals the user reviews ("suggest").
+ */
+export const AgentModeSchema = z.enum(['direct', 'suggest']);
+
 export const ProjectSettingsSchema = z.object({
   width: z.number().int().min(16).max(7680).default(1920).describe('Output width in pixels'),
   height: z.number().int().min(16).max(4320).default(1080).describe('Output height in pixels'),
@@ -61,6 +67,9 @@ export const ProjectSettingsSchema = z.object({
   backgroundColor: ColorSchema.default('#000000'),
   sampleRate: z.union([z.literal(44100), z.literal(48000)]).default(48000),
   brand: BrandSchema.optional().describe('Brand kit: colors, fonts and logo'),
+  agentMode: AgentModeSchema.optional().describe(
+    'How agent edits are handled: "direct" (default) applies them, "suggest" turns them into proposals for review',
+  ),
 });
 
 export const AssetKindSchema = z.enum(['video', 'audio', 'image']);
@@ -233,9 +242,19 @@ const audible = {
   duck: DuckingSchema.optional(),
 };
 
+export const SpeedSchema = z
+  .number()
+  .min(0.1)
+  .max(16)
+  .describe('Playback speed: 0.1–16, 1 = normal, 2 = twice as fast (timeline = source / speed)');
+
 const media = {
   assetId: IdSchema,
-  sourceStart: TimeSchema.default(0).describe('In-point within the asset, seconds'),
+  sourceStart: TimeSchema.default(0).describe(
+    'Lowest source time used, seconds (the in-point; for reversed clips the last frame shown)',
+  ),
+  speed: SpeedSchema.optional().describe('Playback speed (absent = 1)'),
+  reverse: z.boolean().optional().describe('Play the source window backwards'),
 };
 
 export const VideoClipSchema = z.object({
@@ -244,6 +263,10 @@ export const VideoClipSchema = z.object({
   ...media,
   ...visual,
   ...audible,
+  freeze: z
+    .boolean()
+    .optional()
+    .describe('Freeze frame: holds the frame at sourceStart for the whole clip, silent'),
 });
 
 export const AudioClipSchema = z.object({
@@ -328,6 +351,27 @@ export const TrackSchema = z.object({
   clips: z.array(ClipSchema).default([]),
 });
 
+// ---------------------------------------------------------------------------
+// Markers
+// ---------------------------------------------------------------------------
+
+export const MARKER_KINDS = ['chapter', 'note', 'highlight'] as const;
+export const MarkerKindSchema = z.enum(MARKER_KINDS);
+
+/**
+ * A named point (or span, with `end`) on the timeline: chapters for YouTube
+ * and MP4 chapter metadata, notes, and highlight ranges. Markers follow
+ * ripple edits of the whole timeline.
+ */
+export const MarkerSchema = z.object({
+  id: IdSchema,
+  time: TimeSchema.describe('Timeline time in seconds'),
+  label: z.string().max(200).default(''),
+  kind: MarkerKindSchema.default('note'),
+  end: TimeSchema.optional().describe('End of a span marker (e.g. a highlight), seconds'),
+  color: ColorSchema.optional(),
+});
+
 export const ProjectSchema = z.object({
   schemaVersion: z.literal(SCHEMA_VERSION),
   id: IdSchema,
@@ -337,6 +381,7 @@ export const ProjectSchema = z.object({
   settings: ProjectSettingsSchema.prefault({}),
   assets: z.array(AssetSchema).default([]),
   tracks: z.array(TrackSchema).default([]),
+  markers: z.array(MarkerSchema).max(5000).optional().describe('Chapters, notes and highlights'),
 });
 
 // ---------------------------------------------------------------------------
@@ -344,6 +389,7 @@ export const ProjectSchema = z.object({
 // ---------------------------------------------------------------------------
 
 export type ProjectSettings = z.output<typeof ProjectSettingsSchema>;
+export type AgentMode = z.output<typeof AgentModeSchema>;
 export type Brand = z.output<typeof BrandSchema>;
 export type BrandColors = z.output<typeof BrandColorsSchema>;
 export type BrandColorKey = z.output<typeof BrandColorKeySchema>;
@@ -378,6 +424,8 @@ export type VisualClip = VideoClip | ImageClip | TextClip | ShapeClip;
 export type TrackKind = z.output<typeof TrackKindSchema>;
 export type Track = z.output<typeof TrackSchema>;
 export type Project = z.output<typeof ProjectSchema>;
+export type MarkerKind = z.output<typeof MarkerKindSchema>;
+export type Marker = z.output<typeof MarkerSchema>;
 
 /** Which clip types each track kind accepts. */
 export const TRACK_ACCEPTS: Record<TrackKind, readonly ClipType[]> = {

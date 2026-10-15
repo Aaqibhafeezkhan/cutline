@@ -21,6 +21,21 @@ export interface CutlineConfig {
   /** Built web app to serve at / (production / Docker). */
   webDistDir: string | undefined;
   maxUploadBytes: number;
+  /** Claude model for the in-editor chat (the API key itself is read from ANTHROPIC_API_KEY only). */
+  chatModel: string;
+  /** Effort for the in-editor chat; undefined uses the model default. */
+  chatEffort: 'low' | 'medium' | 'high' | 'xhigh' | 'max' | undefined;
+  /** DEV ONLY: use a scripted fake model instead of the Anthropic API. */
+  chatFake: boolean;
+}
+
+const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'] as const;
+
+function chatEffort(value: string | undefined): CutlineConfig['chatEffort'] {
+  if (value === undefined || value === '') return 'medium';
+  return (EFFORTS as readonly string[]).includes(value)
+    ? (value as CutlineConfig['chatEffort'])
+    : undefined;
 }
 
 function bool(v: string | undefined): boolean {
@@ -56,6 +71,9 @@ export function loadConfig(
     publicUrl: env.CUTLINE_PUBLIC_URL || `http://localhost:${port === 4100 ? 5173 : port}`,
     webDistDir: env.CUTLINE_WEB_DIST || undefined,
     maxUploadBytes: Number(env.CUTLINE_MAX_UPLOAD_MB ?? 4096) * 1024 * 1024,
+    chatModel: env.CUTLINE_CHAT_MODEL || 'claude-opus-5-5',
+    chatEffort: chatEffort(env.CUTLINE_CHAT_EFFORT),
+    chatFake: bool(env.CUTLINE_CHAT_FAKE),
     ...overrides,
   };
   return config;

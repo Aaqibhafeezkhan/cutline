@@ -98,15 +98,60 @@ describe('caption layout', () => {
 });
 
 describe('audio mixing', () => {
-  const seg = (over: Partial<AudioSegment> = {}): AudioSegment => ({
-    clipId: 'c',
-    trackId: 't',
-    assetId: 'a',
-    timelineStart: 1,
-    timelineEnd: 3,
-    sourceStart: 10,
-    gain: [{ time: 1, gain: 1 }],
-    ...over,
+  const seg = (over: Partial<AudioSegment> = {}): AudioSegment => {
+    const s = {
+      clipId: 'c',
+      trackId: 't',
+      assetId: 'a',
+      timelineStart: 1,
+      timelineEnd: 3,
+      sourceStart: 10,
+      speed: 1,
+      reverse: false,
+      gain: [{ time: 1, gain: 1 }],
+      ...over,
+    };
+    return {
+      sourceEnd: s.sourceStart + (s.timelineEnd - s.timelineStart) * s.speed,
+      ...s,
+    };
+  };
+
+  it('plays segments faster and backwards', () => {
+    const ramp = {
+      channels: [new Float32Array([0, 1, 2, 3, 4, 5, 6, 7])],
+      sampleRate: 8,
+      timestamp: 0,
+    };
+    // 2×: 8 source samples in 0.5 s of timeline → every second sample at 8 Hz output.
+    const fast = [new Float32Array(4)];
+    mixChunk(
+      fast,
+      0,
+      8,
+      seg({ timelineStart: 0, timelineEnd: 0.5, sourceStart: 0, speed: 2 }),
+      ramp,
+    );
+    expect(Array.from(fast[0]!)).toEqual([0, 2, 4, 6]);
+    // Reversed: timeline 0 plays source 1 s (the end), walking back.
+    const back = [new Float32Array(8)];
+    mixChunk(
+      back,
+      0,
+      8,
+      seg({ timelineStart: 0, timelineEnd: 1, sourceStart: 0, reverse: true }),
+      ramp,
+    );
+    expect(Array.from(back[0]!)).toEqual([7, 6, 5, 4, 3, 2, 1, 0]);
+    // A later chunk (source 1–2 s) fills the first half of a 2 s reversed segment.
+    const two = [new Float32Array(16)];
+    const s2 = seg({ timelineStart: 0, timelineEnd: 2, sourceStart: 0, reverse: true });
+    mixChunk(two, 0, 8, s2, { ...ramp, timestamp: 1 });
+    mixChunk(two, 0, 8, s2, ramp);
+    expect(Array.from(two[0]!)).toEqual([7, 6, 5, 4, 3, 2, 1, 0, 7, 6, 5, 4, 3, 2, 1, 0]);
+    expect(
+      sourceWindow(seg({ timelineStart: 0, timelineEnd: 2, sourceStart: 0, reverse: true }), 0, 1),
+    ).toEqual({ from: 1, to: 2 });
   });
 
   it('places source samples at the right timeline position with gain', () => {

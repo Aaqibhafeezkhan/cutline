@@ -2,12 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { applyOperations, createProject, sequentialContext } from '@cutline/core';
 import {
   beatPoints,
+  beatTimes,
   displayTracks,
   rulerLabel,
   snap,
   snapBlock,
   snapPoints,
   tickStep,
+  trimLimits,
 } from './geometry';
 
 function project() {
@@ -79,6 +81,15 @@ describe('timeline geometry', () => {
     expect(beatPoints(p, grids, ['m'])).toEqual([]);
     expect(beatPoints(p, {}, [])).toEqual([]);
     expect(snapPoints(p, ['m', 'a', 'b'], 0, [2.5])).toContain(2.5);
+
+    // Speed and reverse move the beats; trims stop where the source ends.
+    const m = p.tracks.flatMap((t) => t.clips).find((c) => c.id === 'm')!;
+    const fast = { ...m, speed: 2, duration: 1.5 } as typeof m;
+    expect(beatTimes(fast, beats)).toEqual([2, 2.25, 2.5, 2.75, 3, 3.25]);
+    expect(trimLimits(fast, 10)).toEqual([1.5, 6.5]);
+    const back = { ...m, reverse: true } as typeof m;
+    expect(beatTimes(back, beats)).toEqual([2.5, 3, 3.5, 4, 4.5, 5]);
+    expect(trimLimits(back, 10)).toEqual([-4, 6]);
   });
 
   it('snaps a moving block by whichever edge is closer', () => {

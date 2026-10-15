@@ -160,6 +160,16 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(options),
     }),
+  /** Per-asset transcripts (source time); transcribe=true runs Whisper for missing ones. */
+  transcript: (projectId: string, transcribe = false) =>
+    request<{
+      byAsset: Record<string, Word[]>;
+      missing: string[];
+      words: Word[];
+    }>(`/api/projects/${projectId}/transcript`, {
+      method: 'POST',
+      body: JSON.stringify({ transcribe }),
+    }),
   duckMusic: (projectId: string, musicTrackId: string) =>
     request<{ summary: string }>(`/api/projects/${projectId}/audio/duck`, {
       method: 'POST',

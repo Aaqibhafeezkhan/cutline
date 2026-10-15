@@ -1,4 +1,4 @@
-export type IdPrefix = 'proj' | 'asset' | 'track' | 'clip';
+export type IdPrefix = 'proj' | 'asset' | 'track' | 'clip' | 'marker';
 
 const ALPHABET = '0123456789abcdefghijklmnopqrstuvwxyz';
 

@@ -1,9 +1,13 @@
 import { assertAnimationsFit } from '../animation';
+import { assertSourceRange, clipSpeed, isFreeze } from '../clipmath';
 import { CutlineError } from '../errors';
-import { sortKeyframes } from '../keyframes';
-import { previousAdjacent } from '../queries';
+import { scaleKeyframes, sortKeyframes } from '../keyframes';
+import { overlappingClips, previousAdjacent } from '../queries';
 import {
+  clipEnd,
+  hasSource,
   type AnimatableProperty,
+  type Asset,
   type Animation,
   type Clip,
   type ClipType,
@@ -16,8 +20,9 @@ import {
   type Transition,
   type Word,
 } from '../schema';
-import { EPSILON, formatTime } from '../time';
+import { EPSILON, formatTime, roundTime } from '../time';
 import type { ClipPropsPatch } from './schemas';
+import { emptyLog, shiftClips, type EditLog } from './track-edit';
 
 const VISUAL: ClipType[] = ['video', 'image', 'text', 'shape'];
 const AUDIBLE: ClipType[] = ['video', 'audio'];
@@ -43,6 +48,8 @@ const APPLIES: Record<keyof ClipPropsPatch, readonly ClipType[]> = {
   fadeOut: FADEABLE,
   volume: AUDIBLE,
   muted: AUDIBLE,
+  speed: AUDIBLE,
+  reverse: AUDIBLE,
   text: ['text', 'caption'],
   style: ['text'],
   words: ['caption'],
@@ -134,6 +141,76 @@ export function applyAnimations(
   else delete c.animationOut;
 }
 
+export interface SpeedChange {
+  speed?: number;
+  reverse?: boolean;
+  /** Keep the timeline duration and use more/less source instead (default false). */
+  keepDuration?: boolean;
+  /** Shift later clips on the track by the change in duration (default false). */
+  ripple?: boolean;
+}
+
+/**
+ * Changes speed and/or direction of a video/audio clip draft in place. By
+ * default the source window is kept, so the timeline duration becomes
+ * span / speed (keyframes scale along); with keepDuration the source window
+ * changes instead and must fit into `asset`.
+ */
+export function applySpeedChange(
+  track: Track,
+  clip: Clip,
+  change: SpeedChange,
+  asset: Asset | undefined,
+  log: EditLog,
+): void {
+  if (!hasSource(clip)) {
+    throw new CutlineError(
+      'INVALID_ARGUMENT',
+      `Speed and reverse only apply to video and audio clips, not ${clip.type} (clip ${clip.id}).`,
+      {
+        hint: 'Images, text and shapes have no source timing: change how long they show with trim_clip.',
+      },
+    );
+  }
+  if (isFreeze(clip)) {
+    throw new CutlineError('INVALID_ARGUMENT', `Clip ${clip.id} is a freeze frame.`, {
+      hint: 'A freeze frame holds one frame: change its length with trim_clip, or set the speed of the clip it was taken from.',
+    });
+  }
+  if (change.reverse !== undefined) {
+    if (change.reverse) clip.reverse = true;
+    else delete clip.reverse;
+  }
+  const oldSpeed = clipSpeed(clip);
+  const speed = change.speed ?? oldSpeed;
+  if (speed === oldSpeed) return;
+  if (change.keepDuration) {
+    assertSourceRange(clip, asset, clip.sourceStart, clip.duration * speed, speed);
+  } else {
+    const duration = roundTime((clip.duration * oldSpeed) / speed);
+    const oldEnd = clipEnd(clip);
+    const delta = duration - clip.duration;
+    if (change.ripple) {
+      shiftClips(track, oldEnd, delta, log);
+    } else {
+      const collisions = overlappingClips(track, clip.start, clip.start + duration, clip.id);
+      if (collisions.length > 0) {
+        throw new CutlineError(
+          'OVERLAP',
+          `At speed ${speed} clip ${clip.id} would last ${formatTime(duration)} and overlap ${collisions.map((c) => c.id).join(', ')}.`,
+          {
+            hint: 'Pass ripple: true to push later clips, keepDuration: true to keep the length, or make room first.',
+          },
+        );
+      }
+    }
+    if (clip.keyframes) clip.keyframes = scaleKeyframes(clip.keyframes, duration / clip.duration);
+    clip.duration = duration;
+  }
+  if (speed === 1) delete clip.speed;
+  else clip.speed = speed;
+}
+
 /** Applies a props patch to a clip draft in place, validating applicability. */
 export function applyPropsPatch(track: Track, clip: Clip, patch: ClipPropsPatch): string[] {
   const changed: string[] = [];
@@ -184,6 +261,16 @@ export function applyPropsPatch(track: Track, clip: Clip, patch: ClipPropsPatch)
   }
   if (patch.animationIn !== undefined || patch.animationOut !== undefined) {
     applyAnimations(clip, patch.animationIn, patch.animationOut);
+  }
+  if (patch.speed !== undefined || patch.reverse !== undefined) {
+    // Keeps the source window: the duration follows the speed (no ripple).
+    applySpeedChange(
+      track,
+      clip,
+      { speed: patch.speed, reverse: patch.reverse },
+      undefined,
+      emptyLog(),
+    );
   }
   return changed;
 }

@@ -3,6 +3,7 @@ import { AudioLines, Gauge, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   clipEnd,
+  sourceSpan,
   type AudioClip,
   type Clip,
   type ClipPropsPatch,
@@ -20,6 +21,7 @@ import { AnimationSection } from './AnimationSection';
 import { BeatsSection } from './BeatsSection';
 import { ColorField, Field, NumberField, Section, SliderField } from './fields';
 import { FONT_FAMILIES } from './fonts';
+import { SpeedSection } from './SpeedSection';
 
 function findClip(id: string | undefined) {
   const project = useEditor.getState().project;
@@ -72,7 +74,7 @@ export function Properties() {
         {'sourceStart' in clip && (
           <Field label="Source">
             <span className="text-xs tabular-nums text-muted">
-              {clip.sourceStart.toFixed(2)}s – {(clip.sourceStart + clip.duration).toFixed(2)}s
+              {clip.sourceStart.toFixed(2)}s – {(clip.sourceStart + sourceSpan(clip)).toFixed(2)}s
             </span>
           </Field>
         )}
@@ -92,6 +94,7 @@ export function Properties() {
           <AnimationSection clip={clip} run={run} />
         </>
       )}
+      {(clip.type === 'video' || clip.type === 'audio') && <SpeedSection clip={clip} run={run} />}
       {(clip.type === 'video' || clip.type === 'audio') && (
         <AudioSection clip={clip} trackId={track.id} set={set} run={run} />
       )}

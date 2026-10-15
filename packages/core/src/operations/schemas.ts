@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import {
+  AgentModeSchema,
   AnimatablePropertySchema,
   AnimationSchema,
   AssetSchema,
@@ -8,8 +9,10 @@ import {
   IdSchema,
   KeyframeSchema,
   LogoPositionSchema,
+  MarkerKindSchema,
   ProjectSettingsSchema,
   ShapeKindSchema,
+  SpeedSchema,
   TimeSchema,
   TrackKindSchema,
   TransitionSchema,
@@ -78,6 +81,10 @@ export const ClipPropsPatchSchema = z
     fadeOut: z.number().min(0).max(60),
     volume: z.number().min(0).max(4),
     muted: z.boolean(),
+    speed: SpeedSchema.describe(
+      'Playback speed 0.1–16 (video/audio); the duration follows (source span / speed)',
+    ),
+    reverse: z.boolean().describe('Play the clip backwards (video/audio)'),
     text: z.string().min(1).max(2000),
     style: TextStylePatchSchema,
     words: z.array(WordSchema).max(500).describe('Caption word timings, clip-relative seconds'),
@@ -112,7 +119,17 @@ const RangeSchema = z
 export const UpdateProjectOpSchema = z.object({
   type: z.literal('update_project'),
   name: z.string().min(1).max(200).optional(),
-  settings: ProjectSettingsSchema.partial().optional(),
+  settings: ProjectSettingsSchema.omit({ agentMode: true })
+    .partial()
+    .optional()
+    .describe('Settings to change (the agent mode has its own operation, set_agent_mode)'),
+});
+
+export const SetAgentModeOpSchema = z.object({
+  type: z.literal('set_agent_mode'),
+  mode: AgentModeSchema.describe(
+    '"direct": agent edits apply immediately; "suggest": agent edits become proposals the user accepts or rejects',
+  ),
 });
 
 export const AddAssetOpSchema = z.object({
@@ -398,8 +415,124 @@ export const DuckAudioOpSchema = z.object({
     .describe('Seconds to ramp back up after each range (default 0.4)'),
 });
 
+export const SetSpeedOpSchema = z
+  .object({
+    type: z.literal('set_speed'),
+    clipId: IdSchema,
+    speed: SpeedSchema.optional().describe(
+      'Playback speed 0.1–16: 0.5 = half speed (slow motion), 2 = twice as fast',
+    ),
+    reverse: z.boolean().optional().describe('true plays the clip backwards, false forwards'),
+    keepDuration: z
+      .boolean()
+      .default(false)
+      .describe(
+        'false (default): keep the source material, the clip gets shorter/longer. true: keep the timeline length and use more/less source',
+      ),
+    ripple: z
+      .boolean()
+      .default(false)
+      .describe('Shift later clips on the track when the duration changes'),
+  })
+  .refine((o) => o.speed !== undefined || o.reverse !== undefined, {
+    message: 'give speed and/or reverse',
+  });
+
+export const FreezeFrameOpSchema = z.object({
+  type: z.literal('freeze_frame'),
+  clipId: IdSchema.describe('Video clip to take the frame from'),
+  time: TimeSchema.describe('Timeline time of the frame; the clip is split there'),
+  duration: DurationSchema.max(600).default(2).describe('Seconds to hold the frame (default 2)'),
+  newClipId: IdSchema.optional().describe('Id for the freeze-frame clip'),
+});
+
+export const MarkerInputSchema = z
+  .object({
+    time: TimeSchema.describe('Timeline time in seconds'),
+    label: z.string().max(200).default(''),
+    kind: MarkerKindSchema.default('note').describe('"chapter", "note" (default) or "highlight"'),
+    end: TimeSchema.optional().describe('End of a span (e.g. a highlight range), seconds'),
+    color: ColorSchema.optional(),
+    id: IdSchema.optional(),
+  })
+  .refine((m) => m.end === undefined || m.end > m.time, { message: 'end must be after time' });
+
+export const AddMarkersOpSchema = z.object({
+  type: z.literal('add_markers'),
+  markers: z.array(MarkerInputSchema).min(1).max(1000),
+});
+
+export const UpdateMarkerOpSchema = z.object({
+  type: z.literal('update_marker'),
+  markerId: IdSchema,
+  time: TimeSchema.optional(),
+  label: z.string().max(200).optional(),
+  kind: MarkerKindSchema.optional(),
+  end: TimeSchema.nullable().optional().describe('Span end; null makes it a point marker'),
+  color: ColorSchema.nullable().optional().describe('null removes the color'),
+});
+
+export const RemoveMarkersOpSchema = z
+  .object({
+    type: z.literal('remove_markers'),
+    markerIds: z.array(IdSchema).min(1).max(5000).optional(),
+    kind: MarkerKindSchema.optional().describe('Remove all markers of this kind'),
+  })
+  .refine((o) => (o.markerIds === undefined) !== (o.kind === undefined), {
+    message: 'give exactly one of markerIds or kind',
+  });
+
+export const ChapterInputSchema = z.object({
+  time: TimeSchema.describe('Chapter start, timeline seconds'),
+  title: z.string().min(1).max(200),
+});
+
+export const SetChaptersOpSchema = z.object({
+  type: z.literal('set_chapters'),
+  chapters: z
+    .array(ChapterInputSchema)
+    .max(500)
+    .describe('Chapters in time order; replaces all chapter markers ([] removes them)'),
+  youtube: z
+    .boolean()
+    .default(true)
+    .describe(
+      'Enforce YouTube rules (first at 0, at least 3, each ≥ 10 s apart). Default true; false only needs increasing times',
+    ),
+});
+
+export const ReelRangeSchema = z
+  .object({
+    start: TimeSchema,
+    end: TimeSchema,
+    label: z.string().max(200).optional().describe('Becomes a chapter marker in the reel'),
+  })
+  .refine((r) => r.end > r.start, { message: 'end must be greater than start' });
+
+export const AssembleRangesOpSchema = z.object({
+  type: z.literal('assemble_ranges'),
+  ranges: z
+    .array(ReelRangeSchema)
+    .min(1)
+    .max(200)
+    .describe('Timeline ranges, played back-to-back in this order'),
+  mode: z
+    .enum(['append', 'replace'])
+    .default('append')
+    .describe(
+      '"append" adds the reel after the timeline end; "replace" makes it the whole timeline',
+    ),
+  fadeBetween: z
+    .number()
+    .min(0)
+    .max(2)
+    .default(0)
+    .describe('Crossfade between ranges in seconds (0 = hard cuts)'),
+});
+
 export const OperationSchema = z.discriminatedUnion('type', [
   UpdateProjectOpSchema,
+  SetAgentModeOpSchema,
   AddAssetOpSchema,
   RemoveAssetOpSchema,
   AddTrackOpSchema,
@@ -422,6 +555,13 @@ export const OperationSchema = z.discriminatedUnion('type', [
   DuckAudioOpSchema,
   SetBrandOpSchema,
   AddLogoOpSchema,
+  SetSpeedOpSchema,
+  FreezeFrameOpSchema,
+  AddMarkersOpSchema,
+  UpdateMarkerOpSchema,
+  RemoveMarkersOpSchema,
+  SetChaptersOpSchema,
+  AssembleRangesOpSchema,
 ]);
 
 export type Operation = z.output<typeof OperationSchema>;

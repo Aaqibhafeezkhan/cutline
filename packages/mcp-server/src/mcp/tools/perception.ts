@@ -6,14 +6,18 @@ import {
   IdSchema,
   TimeSchema,
   clipEnd,
+  clipSpeed,
   detectSilences,
   findAsset,
+  isReversed,
   mapSourceRangeToTimeline,
   projectDuration,
   round3,
+  sourceSpan,
   summarizeWaveform,
   timelineEnvelope,
   wordsToCues,
+  type Project,
 } from '@cutline/core';
 import { guard, ok, type ToolContext } from '../context';
 import { timelineWords } from './editing';
@@ -22,6 +26,39 @@ const projectId = IdSchema.optional().describe('Project id (default: active proj
 const assetId = IdSchema.optional().describe(
   'Analyse one source asset (source time) instead of the edited timeline (default: the timeline)',
 );
+
+/** Shot changes inside the visible video clips, in timeline time, plus the clip boundaries. */
+export async function timelineScenes(
+  ctx: ToolContext,
+  project: Project,
+  threshold: number,
+  signal?: AbortSignal,
+) {
+  const scenes: Array<{ time: number; clipId: string; sourceTime: number }> = [];
+  const edits = new Set<number>();
+  for (const track of project.tracks) {
+    if (track.kind !== 'video' || track.hidden) continue;
+    for (const clip of track.clips) {
+      if (clip.type !== 'video') continue;
+      edits.add(round3(clip.start));
+      edits.add(round3(clipEnd(clip)));
+      const asset = project.assets.find((a) => a.id === clip.assetId);
+      if (!asset) continue;
+      for (const s of await ctx.services.analysis.scenes(asset, threshold, signal)) {
+        if (s > clip.sourceStart + 0.05 && s < clip.sourceStart + sourceSpan(clip) - 0.05) {
+          const offset = (s - clip.sourceStart) / clipSpeed(clip);
+          scenes.push({
+            time: round3(clip.start + (isReversed(clip) ? clip.duration - offset : offset)),
+            clipId: clip.id,
+            sourceTime: round3(s),
+          });
+        }
+      }
+    }
+  }
+  scenes.sort((a, b) => a.time - b.time);
+  return { scenes, edits };
+}
 
 export function registerPerceptionTools(server: McpServer, ctx: ToolContext): void {
   const { docs, analysis, renderer, ffmpeg, blobs } = ctx.services;
@@ -264,28 +301,7 @@ export function registerPerceptionTools(server: McpServer, ctx: ToolContext): vo
           scenes: cuts,
         });
       }
-      const scenes: Array<{ time: number; clipId: string; sourceTime: number }> = [];
-      const edits = new Set<number>();
-      for (const track of project.tracks) {
-        if (track.kind !== 'video' || track.hidden) continue;
-        for (const clip of track.clips) {
-          if (clip.type !== 'video') continue;
-          edits.add(round3(clip.start));
-          edits.add(round3(clipEnd(clip)));
-          const asset = project.assets.find((a) => a.id === clip.assetId);
-          if (!asset) continue;
-          for (const s of await analysis.scenes(asset, threshold, extra.signal)) {
-            if (s > clip.sourceStart + 0.05 && s < clip.sourceStart + clip.duration - 0.05) {
-              scenes.push({
-                time: round3(clip.start + s - clip.sourceStart),
-                clipId: clip.id,
-                sourceTime: round3(s),
-              });
-            }
-          }
-        }
-      }
-      scenes.sort((a, b) => a.time - b.time);
+      const { scenes, edits } = await timelineScenes(ctx, project, threshold, extra.signal);
       p.done(`Found ${scenes.length} scene change(s).`);
       return ok(
         `Found ${scenes.length} scene change(s) inside clips, plus ${edits.size} clip boundaries.`,
