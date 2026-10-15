@@ -4,6 +4,7 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import {
   CutlineError,
   IdSchema,
+  clipSpeed,
   findAsset,
   findClip,
   hasSource,
@@ -231,7 +232,7 @@ function targetClips(project: Project, ids: string[] | undefined, musicId: strin
     const asset = clip.type === 'video' ? findAsset(project, clip.assetId) : null;
     const maxDuration =
       clip.type === 'video' && asset?.duration != null
-        ? asset.duration - clip.sourceStart
+        ? (asset.duration - clip.sourceStart) / clipSpeed(clip)
         : Infinity;
     return { id: clip.id, start: clip.start, duration: clip.duration, maxDuration };
   });

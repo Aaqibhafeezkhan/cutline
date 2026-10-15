@@ -11,18 +11,28 @@ import {
   DurationSchema,
   IdSchema,
   OperationSchema,
+  SpeedSchema,
   TEMPLATE_LABELS,
   TemplateParamsSchema,
   TextStylePatchSchema,
   TimeSchema,
   TransformPatchSchema,
+  agentModeOf,
+  clipEnd,
+  findPhraseInWords,
+  isFreeze,
+  round3,
   summarizeProject,
   templateOperations,
+  wordRangesToCuts,
   wordsToCues,
+  type Project,
   type Word,
+  type WordSelection,
 } from '@cutline/core';
 import { planFillerCut, transcribeTimeline } from '../../media/timeline-transcript';
 import { editPayload, guard, ok, type ToolContext } from '../context';
+import { proposalInfo } from './review';
 
 const projectId = IdSchema.optional().describe(
   'Project id. Omit to use the project you created or used most recently.',
@@ -34,6 +44,20 @@ const placement = z
   .describe(
     'If the range is occupied: "error" (default), "overwrite" existing material, or "insert" (push later clips right)',
   );
+
+/** Topmost visible, non-frozen video clip at timeline time `t`. */
+function videoClipAt(project: Project, t: number): string {
+  for (const track of [...project.tracks].reverse()) {
+    if (track.kind !== 'video' || track.hidden) continue;
+    const hit = track.clips.find(
+      (c) => c.type === 'video' && !isFreeze(c) && t >= c.start && t < clipEnd(c),
+    );
+    if (hit) return hit.id;
+  }
+  throw new CutlineError('NOT_FOUND', `No video clip plays at ${t}s.`, {
+    hint: 'Pass a time inside a video clip, or give clipId explicitly (see get_project).',
+  });
+}
 
 export function registerEditingTools(server: McpServer, ctx: ToolContext): void {
   const { docs, assets } = ctx.services;
@@ -116,12 +140,20 @@ export function registerEditingTools(server: McpServer, ctx: ToolContext): void 
       const { project, version, history } = await docs.get(id);
       const others = list.filter((p) => p.id !== id).map((p) => ({ id: p.id, name: p.name }));
       const summary = summarizeProject(project);
+      const agentMode = agentModeOf(project);
+      const proposals = await docs.proposals(id);
+      const review =
+        agentMode === 'suggest'
+          ? ` Suggest mode: your edits are proposed for the user's review (${proposals.length} pending).`
+          : '';
       return ok(
-        `Project "${project.name}" (${id}): ${summary.duration}s, ${summary.tracks.length} tracks, ${project.assets.length} assets.`,
+        `Project "${project.name}" (${id}): ${summary.duration}s, ${summary.tracks.length} tracks, ${project.assets.length} assets.${review}`,
         {
           version,
           editorUrl: ctx.editorUrl(id),
           history,
+          agentMode,
+          ...(proposals.length && { proposals: proposals.map(proposalInfo) }),
           project: args.full ? project : summary,
           ...(others.length && { otherProjects: others }),
         },
@@ -430,11 +462,130 @@ export function registerEditingTools(server: McpServer, ctx: ToolContext): void 
   );
 
   server.registerTool(
+    'delete_words',
+    {
+      title: 'Delete words',
+      description:
+        'Edit the video by editing its transcript: remove spoken words from the timeline, e.g. "remove the sentence \'as I said before\'". Give either text (an exact phrase; case and punctuation are ignored) or wordIndexes (inclusive, into the words of get_transcript format="words" for the timeline). Transcribes the timeline (local Whisper, cached) and removes the words with ONE delete_range (one undo step, ripples all unlocked tracks so audio, video and captions stay in sync). By default the first occurrence of text is removed; pick another with occurrence or all of them with all=true. Use dryRun=true to see what would be cut.',
+      inputSchema: z
+        .object({
+          projectId,
+          text: z
+            .string()
+            .min(1)
+            .max(2000)
+            .optional()
+            .describe('Exact phrase to remove (case and punctuation are ignored)'),
+          occurrence: z
+            .number()
+            .int()
+            .min(1)
+            .optional()
+            .describe('Which occurrence of text to remove, 1-based (default 1)'),
+          all: z.boolean().optional().describe('Remove every occurrence of text (default false)'),
+          wordIndexes: z
+            .object({ start: z.number().int().min(0), end: z.number().int().min(0) })
+            .optional()
+            .describe('Inclusive word index range into the timeline transcript (get_transcript)'),
+          padding: z
+            .number()
+            .min(0)
+            .max(0.5)
+            .optional()
+            .describe('Seconds also cut around the words, never into kept words (default 0.05)'),
+          language: z
+            .string()
+            .min(2)
+            .max(10)
+            .optional()
+            .describe('Spoken language for transcription, e.g. "en", "de" (default: auto-detect)'),
+          dryRun: z
+            .boolean()
+            .optional()
+            .describe('Only report what would be cut, change nothing (default false)'),
+        })
+        .refine((a) => (a.text === undefined) !== (a.wordIndexes === undefined), {
+          message: 'Give exactly one of text or wordIndexes.',
+        }),
+      annotations: { destructiveHint: true },
+    },
+    guard(async (args, extra) => {
+      const id = await ctx.projectId(args.projectId);
+      const words = await timelineWords(ctx, id, args.language, extra);
+      if (words.length === 0) {
+        throw new CutlineError('INVALID_OPERATION', 'No speech found in the timeline audio.', {
+          hint: 'delete_words needs spoken words; use delete_range to cut by time instead.',
+        });
+      }
+      let selections: WordSelection[];
+      if (args.wordIndexes) {
+        selections = [args.wordIndexes];
+      } else {
+        const found = findPhraseInWords(words, args.text!);
+        if (found.length === 0) {
+          throw new CutlineError('NOT_FOUND', `"${args.text}" was not found in the transcript.`, {
+            hint: 'Check the exact wording with get_transcript (format "words"); Whisper may spell or split words differently.',
+          });
+        }
+        const n = args.occurrence ?? 1;
+        if (!args.all && n > found.length) {
+          throw new CutlineError(
+            'NOT_FOUND',
+            `"${args.text}" occurs ${found.length} time(s), so there is no occurrence ${n}.`,
+            { hint: `Pass occurrence between 1 and ${found.length}, or all=true.` },
+          );
+        }
+        selections = args.all ? found : [found[n - 1]!];
+      }
+      const ranges = wordRangesToCuts(words, selections, { padding: args.padding ?? 0.05 });
+      const removedWords = selections.map((s) => ({
+        ...s,
+        text: words
+          .slice(s.start, s.end + 1)
+          .map((w) => w.text)
+          .join(' '),
+        startTime: words[s.start]!.start,
+        endTime: words[s.end]!.end,
+      }));
+      const removed = round3(ranges.reduce((s, r) => s + r.end - r.start, 0));
+      const listed = removedWords.map((r) => `"${r.text}" at ${r.startTime}s`).join(', ');
+      const base = {
+        projectId: id,
+        dryRun: Boolean(args.dryRun),
+        wordCount: words.length,
+        removed: removedWords,
+        ranges,
+        removedDuration: removed,
+      };
+      if (ranges.length === 0) {
+        return ok(`The selected words take no time on the timeline; nothing to cut.`, base);
+      }
+      if (args.dryRun) {
+        return ok(
+          `Would remove ${listed} (${removed}s in ${ranges.length} cut(s)). Call again without dryRun to cut.`,
+          base,
+        );
+      }
+      const count = selections.reduce((s, r) => s + r.end - r.start + 1, 0);
+      const result = await docs.apply(
+        id,
+        [{ type: 'delete_range', ranges }],
+        ctx.origin(),
+        `Delete ${count} word(s)`,
+      );
+      return ok(`Removed ${listed} (${removed}s in ${ranges.length} cut(s)).`, {
+        ...base,
+        ...editPayload(id, result),
+      });
+    }),
+  );
+
+  server.registerTool(
     'set_clip_property',
     {
       title: 'Set clip properties',
       description:
-        'Change clip properties: transform {x, y (px offset from center), scale, rotation (deg), opacity 0..1}, effects {brightness, contrast, saturation (-1..1), blur (px); null removes}, keyframes per property (clip-relative seconds; [] removes), fadeIn/fadeOut (s), volume/muted, text and style for text clips, words for captions, transitionIn, animationIn/animationOut ({preset, duration}; null removes; see animate_clip). Only the fields you pass are changed.',
+        'Change clip properties: transform {x, y (px offset from center), scale, rotation (deg), opacity 0..1}, effects {brightness, contrast, saturation (-1..1), blur (px); null removes}, keyframes per property (clip-relative seconds; [] removes), fadeIn/fadeOut (s), volume/muted, speed/reverse for video and audio (see set_clip_speed), text and style for text clips, words for captions, transitionIn, animationIn/animationOut ({preset, duration}; null removes; see animate_clip). Only the fields you pass are changed.',
       inputSchema: z.object({ projectId, clipId: IdSchema, props: ClipPropsPatchSchema }),
     },
     guard(async (args) => {
@@ -442,6 +593,73 @@ export function registerEditingTools(server: McpServer, ctx: ToolContext): void 
         { type: 'set_clip_props', clipId: args.clipId, props: args.props },
       ]);
       return ok(result.summary, editPayload(id, result));
+    }),
+  );
+
+  server.registerTool(
+    'set_clip_speed',
+    {
+      title: 'Set clip speed / reverse',
+      description:
+        'Change the playback speed of a video or audio clip (0.1–16: 0.5 = slow motion, 2 = twice as fast; constant speed, no ramps) and/or play it backwards (reverse). By default the clip keeps its source material, so its timeline length becomes source length / speed (a 10 s clip at 2× lasts 5 s); keepDuration=true keeps the timeline length and uses more/less source instead. When a slower clip would run into the next clip, pass ripple=true to push later clips on the track (shrinking with ripple=true pulls them in). Sped-up audio keeps its pitch in server renders (atempo) but changes pitch in the browser preview. Images, text and shapes have no speed: use trim_clip.',
+      inputSchema: z
+        .object({
+          projectId,
+          clipId: IdSchema,
+          speed: SpeedSchema.optional().describe('0.1–16, 1 = normal speed'),
+          reverse: z.boolean().optional().describe('true = backwards, false = forwards'),
+          keepDuration: z
+            .boolean()
+            .optional()
+            .describe('Keep the timeline length instead of the source material (default false)'),
+          ripple: z
+            .boolean()
+            .optional()
+            .describe('Shift later clips on the track when the length changes (default false)'),
+        })
+        .refine((a) => a.speed !== undefined || a.reverse !== undefined, {
+          message: 'Give speed and/or reverse.',
+        }),
+    },
+    guard(async (args) => {
+      const { id, result } = await edit(args.projectId, [
+        { type: 'set_speed', ...args, projectId: undefined },
+      ]);
+      return ok(result.summary, editPayload(id, result));
+    }),
+  );
+
+  server.registerTool(
+    'freeze_frame',
+    {
+      title: 'Freeze frame',
+      description:
+        'Hold the video frame shown at a timeline time for a few seconds: the clip is split at `time`, a silent freeze-frame clip is inserted there, and the rest of the clip plus all later clips on that track move later by `duration` (other tracks are not moved). Omit clipId to use the topmost visible video clip at that time. The freeze frame can be trimmed, moved, faded or animated like any clip. Returns its id as freezeClipId.',
+      inputSchema: z.object({
+        projectId,
+        clipId: IdSchema.optional().describe(
+          'Video clip to freeze (default: topmost visible video clip at `time`)',
+        ),
+        time: TimeSchema.describe('Timeline time of the frame to hold'),
+        duration: z.number().positive().max(600).optional().describe('Seconds to hold (default 2)'),
+      }),
+    },
+    guard(async (args) => {
+      const id = await ctx.projectId(args.projectId);
+      let clipId = args.clipId;
+      if (!clipId) {
+        const { project } = await docs.get(id);
+        clipId = videoClipAt(project, args.time);
+      }
+      const result = await docs.apply(
+        id,
+        [{ type: 'freeze_frame', clipId, time: args.time, duration: args.duration }],
+        ctx.origin(),
+      );
+      return ok(result.summary, {
+        ...editPayload(id, result),
+        freezeClipId: result.createdIds[0],
+      });
     }),
   );
 

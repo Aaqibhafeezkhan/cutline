@@ -19,15 +19,19 @@ import {
   splitClipOp,
   trimClip,
 } from './clips';
+import { addMarkers, removeMarkers, setChapters, updateMarker } from './markers';
 import type { OpOutcome } from './outcome';
 import { addCaptions, addShape, addText } from './overlays';
+import { assembleRanges } from './reel';
 import { OperationSchema, type OpOf, type Operation, type OperationType } from './schemas';
+import { freezeFrame, setSpeed } from './speed';
 import {
   addAsset,
   addTrack,
   moveTrack,
   removeAsset,
   removeTrack,
+  setAgentMode,
   updateProject,
   updateTrack,
 } from './structure';
@@ -36,6 +40,7 @@ type Handler<T extends OperationType> = (draft: Project, op: OpOf<T>, ctx: OpCon
 
 const HANDLERS: { [K in OperationType]: Handler<K> } = {
   update_project: updateProject,
+  set_agent_mode: setAgentMode,
   add_asset: addAsset,
   remove_asset: removeAsset,
   add_track: addTrack,
@@ -58,6 +63,13 @@ const HANDLERS: { [K in OperationType]: Handler<K> } = {
   duck_audio: duckAudio,
   set_brand: setBrand,
   add_logo: addLogo,
+  set_speed: setSpeed,
+  freeze_frame: freezeFrame,
+  add_markers: addMarkers,
+  update_marker: updateMarker,
+  remove_markers: removeMarkers,
+  set_chapters: setChapters,
+  assemble_ranges: assembleRanges,
 };
 
 export function parseOperation(input: unknown): Operation {

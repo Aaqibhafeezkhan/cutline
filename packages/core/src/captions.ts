@@ -1,3 +1,4 @@
+import { clipSpeed, isFreeze, isReversed, sourceSpan } from './clipmath';
 import type { Cue } from './operations/schemas';
 import type { CaptionStyle, Project, Word } from './schema';
 import { roundTime } from './time';
@@ -66,10 +67,12 @@ export function mapWordsToTimeline(
     if (track.muted || track.kind === 'caption') continue;
     for (const clip of track.clips) {
       if (clip.type !== 'video' && clip.type !== 'audio') continue;
-      if (clip.muted) continue;
+      // Freeze frames are silent; reversed speech is not intelligible.
+      if (clip.muted || isFreeze(clip) || isReversed(clip)) continue;
       const words = wordsByAsset.get(clip.assetId);
       if (!words) continue;
-      const srcEnd = clip.sourceStart + clip.duration;
+      const speed = clipSpeed(clip);
+      const srcEnd = clip.sourceStart + sourceSpan(clip);
       for (const w of words) {
         const mid = (w.start + w.end) / 2;
         if (mid < clip.sourceStart || mid >= srcEnd) continue;
@@ -77,8 +80,8 @@ export function mapWordsToTimeline(
         const end = Math.min(w.end, srcEnd);
         out.push({
           text: w.text,
-          start: roundTime(clip.start + start - clip.sourceStart),
-          end: roundTime(clip.start + end - clip.sourceStart),
+          start: roundTime(clip.start + (start - clip.sourceStart) / speed),
+          end: roundTime(clip.start + (end - clip.sourceStart) / speed),
         });
       }
     }

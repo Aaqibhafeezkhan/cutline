@@ -1,3 +1,5 @@
+import { clipSpeed, isFreeze, isReversed, sourceSpan } from './clipmath';
+import { chapterList } from './markers';
 import { projectDuration } from './queries';
 import type { Clip, Project } from './schema';
 import { clipEnd } from './schema';
@@ -12,6 +14,12 @@ export interface ClipSummary {
   end: number;
   asset?: string;
   source?: [number, number];
+  /** Playback speed when not 1 (timeline duration = source span / speed). */
+  speed?: number;
+  /** The source window plays backwards. */
+  reverse?: boolean;
+  /** Freeze frame: holds the frame at source[0], silent. */
+  freeze?: boolean;
   text?: string;
   shape?: string;
   volume?: number;
@@ -34,7 +42,12 @@ function summarizeClip(clip: Clip, assetNames: Map<string, string>): ClipSummary
   };
   if ('assetId' in clip) s.asset = `${clip.assetId} (${assetNames.get(clip.assetId) ?? '?'})`;
   if (clip.type === 'video' || clip.type === 'audio') {
-    s.source = [r3(clip.sourceStart), r3(clip.sourceStart + clip.duration)];
+    s.source = [r3(clip.sourceStart), r3(clip.sourceStart + sourceSpan(clip))];
+    if (isFreeze(clip)) s.freeze = true;
+    else {
+      if (clipSpeed(clip) !== 1) s.speed = clipSpeed(clip);
+      if (isReversed(clip)) s.reverse = true;
+    }
     if (clip.volume !== 1) s.volume = clip.volume;
     if (clip.muted) s.muted = true;
     if (clip.duck) s.ducked = `${clip.duck.amountDb} dB in ${clip.duck.ranges.length} range(s)`;
@@ -64,6 +77,8 @@ export function summarizeProject(project: Project, options: { maxClipsPerTrack?:
   const max = options.maxClipsPerTrack ?? 200;
   const assetNames = new Map(project.assets.map((a) => [a.id, a.name]));
   const brand = project.settings.brand;
+  const chapters = chapterList(project);
+  const others = (project.markers ?? []).filter((m) => m.kind !== 'chapter');
   return {
     id: project.id,
     name: project.name,
@@ -93,6 +108,20 @@ export function summarizeProject(project: Project, options: { maxClipsPerTrack?:
       ...(a.width && a.height ? { size: `${a.width}x${a.height}` } : {}),
       hasAudio: a.hasAudio,
     })),
+    ...(chapters.length && {
+      /** Chapter markers in time order (YouTube description / MP4 chapters). */
+      chapters: chapters.map((c) => ({ time: r3(c.time), title: c.title })),
+    }),
+    ...(others.length && {
+      /** Note and highlight markers (highlights may span until `end`). */
+      markers: others.slice(0, max).map((m) => ({
+        id: m.id,
+        kind: m.kind,
+        time: r3(m.time),
+        ...(m.end !== undefined && { end: r3(m.end) }),
+        label: m.label,
+      })),
+    }),
     tracks: project.tracks.map((t, index) => ({
       id: t.id,
       name: t.name,

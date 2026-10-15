@@ -36,7 +36,10 @@ const GROUPS: Record<string, string[]> = {
     'delete_clip',
     'delete_range',
     'remove_filler_words',
+    'delete_words',
     'set_clip_property',
+    'set_clip_speed',
+    'freeze_frame',
     'animate_clip',
     'add_text_overlay',
     'add_shape',
@@ -58,7 +61,15 @@ const GROUPS: Record<string, string[]> = {
   ],
   Music: ['detect_beats', 'cut_to_beats'],
   Audio: ['duck_music', 'normalize_loudness'],
+  'Chapters & highlights': [
+    'get_chapters_input',
+    'set_chapters',
+    'export_chapters',
+    'mark_highlights',
+    'create_highlight_reel',
+  ],
   Output: ['render_preview', 'export_video'],
+  Review: ['list_proposals'],
 };
 
 function typeOf(s: Schema): string {

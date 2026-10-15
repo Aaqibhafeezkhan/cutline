@@ -2,11 +2,16 @@ import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
 import {
   applyJsonPatch,
+  applyOperations,
+  defaultContext,
+  replayContext,
+  type AgentMode,
   type HistoryInfo,
   type OperationInput,
   type Origin,
   type Participant,
   type Project,
+  type Proposal,
   type ServerMessage,
 } from '@cutline/core';
 import { toast } from 'sonner';
@@ -42,15 +47,46 @@ interface EditorState {
   /** clipId → highlight expiry (ms timestamp) and who caused it. */
   highlights: Record<string, { until: number; origin: Origin }>;
   activity: ActivityEntry[];
+  /** Pending agent proposals (suggest mode), oldest first. */
+  proposals: Proposal[];
+  /** The proposal shown in the preview, applied to a local copy of the project. */
+  preview: ProposalPreview | null;
 
   open(projectId: string): void;
   close(): void;
   dispatch(operations: OperationInput[], label?: string): Promise<boolean>;
   undo(): void;
   redo(): void;
+  setAgentMode(mode: AgentMode): Promise<boolean>;
+  /** Accepts one proposal, or all without an id. */
+  acceptProposal(id?: string): Promise<void>;
+  /** Rejects one proposal, or all without an id. */
+  rejectProposal(id?: string): Promise<void>;
+  /** Shows a proposal in the preview, or goes back to the live project. */
+  togglePreview(id: string | null): void;
   select(ids: string[], additive?: boolean): void;
   setZoom(zoom: number): void;
   receive(msg: ServerMessage): void;
+}
+
+export interface ProposalPreview {
+  id: string;
+  project: Project;
+  affectedIds: string[];
+}
+
+/** Applies a proposal to a local copy of the project (null if it no longer applies). */
+export function previewProposal(project: Project, proposal: Proposal): ProposalPreview | null {
+  try {
+    const result = applyOperations(
+      project,
+      proposal.operations,
+      replayContext(defaultContext, proposal.ids),
+    );
+    return { id: proposal.id, project: result.project, affectedIds: result.affectedIds };
+  } catch {
+    return null;
+  }
 }
 
 let client: SyncClient | null = null;
@@ -75,6 +111,8 @@ export const useEditor = create<EditorState>()(
     zoom: 60,
     highlights: {},
     activity: [],
+    proposals: [],
+    preview: null,
 
     open(projectId) {
       client?.close();
@@ -85,6 +123,8 @@ export const useEditor = create<EditorState>()(
         s.selection = [];
         s.activity = [];
         s.highlights = {};
+        s.proposals = [];
+        s.preview = null;
       });
       client = new SyncClient(
         (msg) => get().receive(msg),
@@ -125,6 +165,54 @@ export const useEditor = create<EditorState>()(
       client?.redo().catch(reportError);
     },
 
+    setAgentMode(mode) {
+      return get().dispatch(
+        [{ type: 'set_agent_mode', mode }],
+        mode === 'suggest' ? 'Review agent edits' : 'Apply agent edits directly',
+      );
+    },
+
+    async acceptProposal(id) {
+      if (!client) return;
+      try {
+        await client.proposal('accept', id);
+        const stale = get().proposals.filter((p) => p.status === 'stale');
+        if (id === undefined && stale.length) {
+          toast.warning(`${stale.length} suggestion(s) no longer apply`, {
+            description:
+              'The project changed since the agent proposed them. Reject them or ask the agent again.',
+          });
+        }
+      } catch (err) {
+        reportError(err);
+      }
+    },
+
+    async rejectProposal(id) {
+      if (!client) return;
+      try {
+        await client.proposal('reject', id);
+      } catch (err) {
+        reportError(err);
+      }
+    },
+
+    togglePreview(id) {
+      const { project, proposals, preview } = get();
+      const proposal = proposals.find((p) => p.id === id);
+      if (!id || !project || !proposal || preview?.id === id) {
+        set((s) => {
+          s.preview = null;
+        });
+        return;
+      }
+      const next = previewProposal(project, proposal);
+      if (!next) toast.error('This suggestion no longer applies to the current project.');
+      set((s) => {
+        s.preview = next;
+      });
+    },
+
     select(ids, additive = false) {
       set((s) => {
         s.selection = additive ? [...new Set([...s.selection, ...ids])] : ids;
@@ -156,6 +244,7 @@ export const useEditor = create<EditorState>()(
             }));
             s.activity = [...running, ...past].slice(0, MAX_ACTIVITY);
           });
+          refreshPreview();
           return;
         case 'patch': {
           const state = get();
@@ -186,6 +275,7 @@ export const useEditor = create<EditorState>()(
             });
             s.activity.splice(MAX_ACTIVITY);
           });
+          refreshPreview();
           return;
         }
         case 'activity':
@@ -210,6 +300,12 @@ export const useEditor = create<EditorState>()(
             }
           });
           return;
+        case 'proposals':
+          set((s) => {
+            s.proposals = msg.proposals;
+          });
+          refreshPreview();
+          return;
         case 'presence':
           set((s) => {
             s.participants = msg.participants;
@@ -224,6 +320,18 @@ export const useEditor = create<EditorState>()(
     },
   })),
 );
+
+/**
+ * Re-applies the previewed proposal after the project or the proposals
+ * changed; ends the preview when the proposal is gone or no longer applies.
+ */
+function refreshPreview() {
+  const { preview, project, proposals } = useEditor.getState();
+  if (!preview) return;
+  const proposal = proposals.find((p) => p.id === preview.id);
+  const next = project && proposal ? previewProposal(project, proposal) : null;
+  useEditor.setState({ preview: next });
+}
 
 /** Playhead time lives in its own store so 60 fps updates don't re-render the timeline. */
 interface PlayheadState {

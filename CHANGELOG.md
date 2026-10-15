@@ -7,6 +7,92 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-14
+
+Editing by conversation and by text: cut the video by deleting words from its transcript, chat
+with Claude right inside the editor, let agents propose edits for review instead of applying them,
+add chapters, markers and highlight reels, and change clip speed, reverse clips or freeze frames.
+Agents get nine new MCP tools; the browser engine and the server renderer still follow the same
+resolver.
+
+### Added
+
+- **Transcript editing**: edit the video by editing its transcript. The editor's new Transcript
+  panel shows the timeline's words as text (paragraphs at pauses), highlights the word being
+  spoken and seeks on click. Select words (drag, Shift+click or Shift+arrow keys) and press
+  Delete/Backspace to cut exactly those words out of all unlocked tracks with one ripple
+  `delete_range` (one undo step); the right-click menu also offers "Remove fillers". The new MCP
+  tool `delete_words` does the same for agents, by exact phrase (`text`, with `occurrence` or
+  `all`) or by word index range, with `dryRun`. Core exports the pure helpers
+  `wordRangesToCuts`, `findPhraseInWords` and `groupParagraphs`; the server adds a
+  `POST /api/projects/:id/transcript` route that returns cached (or freshly transcribed) per-asset
+  words.
+- **Chat with Claude inside the editor**: a collapsible Chat panel (toolbar button or `Ctrl+K`)
+  where you can type "Make this a 30-second short" without Claude Desktop. The server runs an agent
+  loop with the official Anthropic TypeScript SDK (`@anthropic-ai/sdk`) over the existing MCP tools,
+  called in-process and scoped to the open project, so every edit is a normal operation: it shows up
+  live with the agent highlight and `Ctrl+Z` undoes it. Replies stream over
+  `POST /api/projects/:id/chat` (server-sent events) with text, tool-call chips, errors, a Stop
+  button and "New chat"; `get_frames` images are passed to the model so it can look at the video.
+  At most 20 tool calls per message. Enable it by setting `ANTHROPIC_API_KEY` in the server
+  environment (it never reaches the browser); `CUTLINE_CHAT_MODEL` (default `claude-opus-5-5`) and
+  `CUTLINE_CHAT_EFFORT` (default `medium`) tune it. Without a key the panel explains how to enable it.
+- **Chapters, markers and highlight reels**: projects can hold markers (`chapter`, `note`,
+  `highlight` with an optional end) that follow ripple edits of the whole timeline (`delete_range`,
+  and ripple trims/deletes on the main video track). New core operations `add_markers`,
+  `update_marker`, `remove_markers`, `set_chapters` (validates order and YouTube's rules: first at
+  0, at least 3, each at least 10 s) and `assemble_ranges` (lays timeline ranges back-to-back with
+  everything they show, optional crossfades; labelled ranges become chapters). Five new MCP tools:
+  `get_chapters_input` (transcript sentences grouped into ~20–60 s blocks plus scene cuts,
+  silences and loud moments, so an agent can pick chapters and highlights in one call),
+  `set_chapters`, `export_chapters` (YouTube description text, ffmetadata or JSON),
+  `mark_highlights` and `create_highlight_reel` (new project or appended, optional 9:16/1:1
+  output size). Server-rendered MP4s embed the chapters. The editor draws chapters as labelled
+  flags and highlights as coloured spans on the ruler (click seeks, double-click renames, Del
+  removes, `M` adds a note at the playhead) and has a Chapters panel with "Copy for YouTube".
+  `get_project` lists chapters and markers.
+- **Suggestion mode for agent edits** ("pull requests for edits"): a per-project Agent
+  _Direct / Suggest_ switch in the top bar (new `set_agent_mode` operation, stored as
+  `settings.agentMode`). In suggest mode every agent edit becomes a proposal with a change
+  summary instead of changing the timeline. The new Review tab lists them; Preview shows the
+  result in the player and outlines proposed clips on the timeline, Accept applies a proposal as
+  one undo step (rebased onto later edits, marked stale if it no longer applies), Reject discards
+  it, and Accept all / Reject all handle the whole queue. Proposals are persisted with the project
+  data and streamed to editors over the WebSocket. Agents are told "proposed as …, waiting for
+  review", can check `list_proposals` (new MCP tool) and see `agentMode` in `get_project`; they
+  cannot change the mode, undo or redo while their edits are under review. Core exports the pure
+  `diffProjects` / `describeChanges` helpers.
+- **Clip speed, reverse and freeze frames**: video and audio clips get `speed` (0.1–16, constant;
+  timeline duration = source span / speed) and `reverse`; video clips can be freeze frames
+  (`freeze: true`, a silent hold of the frame at `sourceStart`). New operations `set_speed`
+  (`keepDuration`, `ripple`) and `freeze_frame` (splits the clip at a time and inserts a hold,
+  rippling the track); `set_clip_props` accepts `speed`/`reverse`. Splits, trims, validation,
+  summaries, transcript/beat/scene mappings and the resolver follow the speed (`resolveFrame`
+  maps source times, reversed clips run backwards; `resolveAudioSegments` now carries `speed`,
+  `reverse` and `sourceEnd`). The browser engine retimes audio by resampling, plays reversed audio
+  backwards and serves reversed video from a cached decode window; the ffmpeg renderer uses
+  `setpts`, frame-exact `reverse`/`areverse` on trimmed windows, chained `atempo` and single-frame
+  holds. New MCP tools `set_clip_speed` and `freeze_frame`. The editor has a Speed section
+  (0.25×–4× presets, custom value, Reverse, Ripple), a Freeze frame button (`F`) and
+  speed/reverse/freeze badges on timeline clips.
+
+### Changed
+
+- The MCP server now exposes 42 tools (was 33): `delete_words`, `list_proposals`,
+  `get_chapters_input`, `set_chapters`, `export_chapters`, `mark_highlights`,
+  `create_highlight_reel`, `set_clip_speed` and `freeze_frame`.
+- The timeline ruler is taller (40 px, was 26 px) to make room for the marker strip.
+- New dependency: `@anthropic-ai/sdk` in `@cutline/mcp-server` for the editor chat.
+
+### Known limitations
+
+- At speeds other than 1× the pitch differs between preview and export: the browser engine
+  resamples (pitch changes with the speed), the ffmpeg renderer uses `atempo` (pitch is kept).
+- Reversed video in the browser preview needs a short warm-up while the decode window is filled.
+- The editor chat only works when the server has `ANTHROPIC_API_KEY` set.
+- Ripple moves (moving clips with ripple) do not shift markers; only `delete_range` and ripple
+  trims/deletes on the main video track do.
+
 ## [0.3.0] - 2026-10-13
 
 Audio and branding: remove filler words, detect beats and cut on the beat, duck music under
@@ -126,7 +212,8 @@ watches and intervenes live.
   Changesets release workflow, generated MCP tool reference, architecture/storage/licensing docs,
   synthetic CC0 test fixtures, scripted demo agent.
 
-[Unreleased]: https://github.com/Aepzie/cutline/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/Aepzie/cutline/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/Aepzie/cutline/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/Aepzie/cutline/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/Aepzie/cutline/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Aepzie/cutline/releases/tag/v0.1.0

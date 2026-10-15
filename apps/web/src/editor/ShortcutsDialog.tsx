@@ -5,7 +5,9 @@ export const SHORTCUTS: Array<[string[], string]> = [
   [['Space'], 'Play / pause'],
   [['S'], 'Split at playhead (selected clips, or all under the playhead)'],
   [['T'], 'Add text at the playhead'],
-  [['Del'], 'Delete selected clips'],
+  [['F'], 'Freeze frame: hold the video frame at the playhead for 2 s'],
+  [['M'], 'Add a marker at the playhead (double-click it on the ruler to rename)'],
+  [['Del'], 'Delete selected clips or markers'],
   [['Shift', 'Del'], 'Ripple delete (close the gap)'],
   [['Ctrl', 'Z'], 'Undo (works on agent changes too)'],
   [['Ctrl', 'Shift', 'Z'], 'Redo'],
@@ -17,6 +19,7 @@ export const SHORTCUTS: Array<[string[], string]> = [
   [['+', '−'], 'Zoom timeline in / out'],
   [['Ctrl', 'A'], 'Select all clips'],
   [['Esc'], 'Clear selection'],
+  [['Ctrl', 'K'], 'Open / close the chat with Claude'],
   [['?'], 'Show this help'],
 ];
 

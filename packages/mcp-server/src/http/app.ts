@@ -19,7 +19,11 @@ import {
   type DuckOptions,
   type LoudnessOptions,
 } from '../media/mixing';
-import { planFillerCut, transcribeTimeline } from '../media/timeline-transcript';
+import {
+  planFillerCut,
+  timelineTranscriptSources,
+  transcribeTimeline,
+} from '../media/timeline-transcript';
 import { createMcpServer } from '../mcp/server';
 import { log } from '../log';
 import type { Services } from '../services';
@@ -271,6 +275,101 @@ export function createApp(services: Services): AppHandle {
     }),
   );
 
+  // ------------------------------------------------- chat with Claude (in-editor)
+  // Same security middleware as every other route. The Anthropic key stays on the server.
+  api.get(
+    '/projects/:id/chat',
+    route(async (req, res) => {
+      const id = param(req, 'id');
+      await docs.get(id);
+      res.json({
+        ...services.chat.status(),
+        running: services.chat.isRunning(id),
+        events: services.chat.events(id),
+      });
+    }),
+  );
+
+  // Streams the reply as server-sent events: one JSON ChatEvent per `data:` line.
+  api.post(
+    '/projects/:id/chat',
+    json,
+    route(async (req, res) => {
+      const id = param(req, 'id');
+      await docs.get(id);
+      const texts = services.chat.prepare(id, req.body);
+      res.writeHead(200, {
+        'content-type': 'text/event-stream; charset=utf-8',
+        'cache-control': 'no-cache, no-transform',
+        connection: 'keep-alive',
+        'x-accel-buffering': 'no',
+      });
+      res.flushHeaders();
+      // Closing the stream (navigating away, fetch aborted) stops the reply.
+      res.on('close', () => {
+        if (!res.writableEnded) services.chat.cancel(id);
+      });
+      await services.chat.send(id, texts, (event) => {
+        if (!res.writableEnded) res.write(`data: ${JSON.stringify(event)}\n\n`);
+      });
+      res.end();
+    }),
+  );
+
+  api.post(
+    '/projects/:id/chat/cancel',
+    route(async (req, res) => {
+      res.json({ cancelled: services.chat.cancel(param(req, 'id')) });
+    }),
+  );
+
+  // "New chat"
+  api.delete(
+    '/projects/:id/chat',
+    route(async (req, res) => {
+      await services.chat.reset(param(req, 'id'));
+      res.json({ ok: true });
+    }),
+  );
+
+  // The editor's transcript panel: per-asset words (re-mapped client-side after every edit).
+  // transcribe=false only returns cached transcripts; true runs Whisper for the missing ones.
+  api.post(
+    '/projects/:id/transcript',
+    json,
+    route(async (req, res) => {
+      const id = param(req, 'id');
+      const body = (req.body ?? {}) as { transcribe?: boolean };
+      if (body.transcribe !== true) {
+        res.json(await timelineTranscriptSources(services, id));
+        return;
+      }
+      const activityId = randomUUID();
+      const report = (status: 'started' | 'progress' | 'finished' | 'failed', message: string) =>
+        docs.activity({
+          projectId: id,
+          id: activityId,
+          origin: USER,
+          tool: 'get_transcript',
+          status,
+          message,
+          at: new Date().toISOString(),
+        });
+      report('started', 'Transcribing the timeline audio…');
+      try {
+        const sources = await timelineTranscriptSources(services, id, {
+          transcribe: true,
+          progress: { update: (_f, message) => report('progress', message) },
+        });
+        report('finished', `Transcription finished (${sources.words.length} words).`);
+        res.json(sources);
+      } catch (err) {
+        report('failed', 'Transcription failed.');
+        throw err;
+      }
+    }),
+  );
+
   // Raw upload: body is the file; name via ?name= or X-File-Name.
   api.post(
     '/projects/:id/assets',
@@ -475,6 +574,7 @@ export function createApp(services: Services): AppHandle {
     app,
     async close() {
       clearInterval(sweeper);
+      await services.chat.close();
       await Promise.all([...sessions.values()].map((t) => t.close().catch(() => undefined)));
       sessions.clear();
     },

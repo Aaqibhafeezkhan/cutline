@@ -12,7 +12,7 @@ import {
 import { Ffmpeg } from '../src/media/ffmpeg';
 import { probeFile } from '../src/media/probe';
 import { fontGroup } from '../src/render/fonts';
-import { buildRenderGraph, wrapText } from '../src/render/graph';
+import { atempoChain, buildRenderGraph, wrapText } from '../src/render/graph';
 import { add, isConstant, num, piecewise } from '../src/render/expr';
 import { Renderer } from '../src/render/renderer';
 import { LocalBlobStore } from '../src/storage/local';
@@ -318,6 +318,148 @@ describe.runIf(hasFfmpeg && hasFixtures)('server renderer (ffmpeg)', () => {
     expect(red.cx).toBeLessThan(320);
   }, 60_000);
 });
+
+/** testsrc clips: 'fast' (2×, 0–2 s, source 0–4), 'rev' (reversed, 2–5 s, source 0–3) + a hold. */
+function speedProject(): Project {
+  const ctx = sequentialContext();
+  const project = createProject({ name: 'Speed', settings: { width: 640, height: 360 } }, ctx);
+  return applyOperations(
+    project,
+    [
+      {
+        type: 'add_asset',
+        asset: {
+          id: 'test',
+          name: 'testsrc-5s.mp4',
+          kind: 'video',
+          src: 'assets/test/testsrc-5s.mp4',
+          mimeType: 'video/mp4',
+          duration: 5,
+          width: 640,
+          height: 360,
+          fps: 30,
+          hasVideo: true,
+          hasAudio: true,
+        },
+      },
+      { type: 'add_clip', assetId: 'test', start: 0, duration: 4, id: 'fast' },
+      { type: 'set_speed', clipId: 'fast', speed: 2 },
+      { type: 'add_clip', assetId: 'test', start: 2, duration: 3, id: 'rev' },
+      { type: 'set_speed', clipId: 'rev', reverse: true },
+      { type: 'freeze_frame', clipId: 'rev', time: 4, duration: 1, newClipId: 'hold' },
+    ],
+    ctx,
+  ).project;
+}
+
+const graphOpts = (start: number, end: number, includeAudio = false) => ({
+  start,
+  end,
+  width: 640,
+  height: 360,
+  fps: 30,
+  includeAudio,
+  textFile: () => 'x.txt',
+});
+
+describe('speed, reverse and freeze frames in the filtergraph', () => {
+  it('chains atempo factors inside 0.5–2', () => {
+    expect(atempoChain(4)).toEqual([2, 2]);
+    expect(atempoChain(0.25)).toEqual([0.5, 0.5]);
+    expect(atempoChain(1.5)).toEqual([1.5]);
+    expect(atempoChain(16)).toEqual([2, 2, 2, 2]);
+    expect(atempoChain(0.1)).toEqual([0.5, 0.5, 0.5, 0.8]);
+    expect(atempoChain(1)).toEqual([1]);
+  });
+
+  it('retimes, reverses and holds video and audio', () => {
+    const paths = new Map([['test', '/media/testsrc.mp4']]);
+    const graph = buildRenderGraph(speedProject(), paths, graphOpts(0, 6, true));
+    // 2×: reads 4 s of source and halves the timestamps.
+    expect(graph.inputs[0]).toEqual(['-ss', '0', '-t', '4', '-i', '/media/testsrc.mp4']);
+    expect(graph.filter).toContain('[0:v]setpts=PTS-STARTPTS,setpts=PTS/2,fps=30');
+    // Reversed (source 1–3 s after the freeze split): exactly frames 30..89, then reversed.
+    expect(graph.inputs[1]).toEqual(['-ss', '0.983333', '-t', '2', '-i', '/media/testsrc.mp4']);
+    expect(graph.filter).toContain('[1:v]setpts=PTS-STARTPTS,reverse,setpts=PTS-STARTPTS,fps=30');
+    // Freeze frame: one frame, cloned.
+    expect(graph.filter).toMatch(
+      /\[2:v\]trim=end_frame=1,setpts=PTS-STARTPTS,fps=30,tpad=stop_mode=clone/,
+    );
+    // Audio: 2× → atempo=2; reversed → areverse; nothing for the silent hold.
+    expect(graph.filter).toMatch(/aformat=[^,]+,atempo=2,adelay=0/);
+    expect(graph.filter).toMatch(/aformat=[^,]+,areverse,adelay=2000/);
+    expect(graph.filter.match(/adelay=/g)).toHaveLength(3); // fast, rev (left), rev (right)
+  });
+});
+
+describe.runIf(hasFfmpeg && hasFixtures)('speed and reverse in rendered frames (ffmpeg)', () => {
+  it('shows the source frames the resolver picks', async () => {
+    const project = speedProject();
+    const blobs = new LocalBlobStore(await tempDir());
+    await blobs.putFile('assets/test/testsrc-5s.mp4', fixture('testsrc-5s.mp4'));
+    const renderer = new Renderer(ffmpeg, blobs);
+    // 2× fast, reversed, reversed after the hold, and the hold itself.
+    const times = [0.5, 1.5, 2.5, 3.5, 5.5, 4.5];
+    const frames = await renderer.frames(project, times, 640);
+    frames.forEach((jpeg, i) => {
+      const t = times[i]!;
+      if (process.env.CUTLINE_TEST_ARTIFACTS) {
+        writeFileSync(join(process.env.CUTLINE_TEST_ARTIFACTS, `speed-${t}.jpg`), jpeg);
+      }
+      const layer = resolveFrame(project, t).layers[0]!;
+      const expected = Math.floor(layer.sourceTime! * 30 + 1e-6);
+      const got = gray(jpeg);
+      const candidates = [-2, -1, 0, 1, 2].map((d) => expected + d).filter((n) => n >= 0);
+      const diffs = candidates.map((n) => meanDiff(got, sourceFrame(n)));
+      const best = candidates[diffs.indexOf(Math.min(...diffs))];
+      expect({ t, frame: best }).toEqual({ t, frame: expected });
+    });
+  }, 120_000);
+});
+
+function gray(jpeg: Buffer): Buffer {
+  return spawnSync(
+    FFMPEG,
+    ['-v', 'error', '-i', 'pipe:0', '-f', 'rawvideo', '-pix_fmt', 'gray', 'pipe:1'],
+    { input: jpeg, maxBuffer: 64 * 1024 * 1024, windowsHide: true },
+  ).stdout;
+}
+
+const frameCache = new Map<number, Buffer>();
+/** Frame `n` of the testsrc fixture, as 640×360 gray pixels. */
+function sourceFrame(n: number): Buffer {
+  let f = frameCache.get(n);
+  if (!f) {
+    f = spawnSync(
+      FFMPEG,
+      [
+        '-v',
+        'error',
+        '-i',
+        fixture('testsrc-5s.mp4'),
+        '-vf',
+        `select=eq(n\\,${n})`,
+        '-frames:v',
+        '1',
+        '-f',
+        'rawvideo',
+        '-pix_fmt',
+        'gray',
+        'pipe:1',
+      ],
+      { maxBuffer: 64 * 1024 * 1024, windowsHide: true },
+    ).stdout;
+    frameCache.set(n, f);
+  }
+  return f;
+}
+
+function meanDiff(a: Buffer, b: Buffer): number {
+  let sum = 0;
+  const n = Math.min(a.length, b.length);
+  for (let i = 0; i < n; i++) sum += Math.abs(a[i]! - b[i]!);
+  return n ? sum / n : Infinity;
+}
 
 /** Bounding box of saturated red pixels in a decoded frame. */
 function redBox(jpeg: Buffer, w: number, h: number): { cx: number; width: number } {

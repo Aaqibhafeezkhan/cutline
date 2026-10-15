@@ -1,6 +1,6 @@
 {
   "name": "@cutline/mcp-server",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "description": "Cutline MCP server: editing + perception tools for AI agents, WebSocket sync for the browser editor.",
   "license": "MIT",
@@ -21,6 +21,7 @@
     "docs:tools": "tsx scripts/gen-tool-docs.ts && prettier --write ../../docs/mcp-tools.md"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.133.0",
     "@cutline/core": "workspace:*",
     "@modelcontextprotocol/sdk": "^1.32.1",
     "express": "^5.3.0",
