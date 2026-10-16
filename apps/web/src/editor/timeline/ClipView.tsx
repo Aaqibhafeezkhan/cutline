@@ -69,11 +69,10 @@ export const ClipView = memo(function ClipView({
   const assetName = useEditor((s) =>
     'assetId' in clip ? s.project?.assets.find((a) => a.id === clip.assetId)?.name : undefined,
   );
-  const waveformAsset = useEditor((s) =>
-    (clip.type === 'audio' || clip.type === 'video')
-      ? s.project?.assets.find((asset) => asset.id === clip.assetId && asset.hasAudio)
-      : undefined,
-  );
+  const waveformAsset = useEditor((s) => {
+    if (clip.type !== 'audio' && clip.type !== 'video') return undefined;
+    return s.project?.assets.find((asset) => asset.id === clip.assetId && asset.hasAudio);
+  });
   const projectId = useEditor((s) => s.projectId);
   const select = useEditor((s) => s.select);
   const grid = useBeats((s) => ('assetId' in clip ? s.byAsset[clip.assetId] : undefined));
@@ -129,7 +128,8 @@ export const ClipView = memo(function ClipView({
           projectId={projectId}
           assetId={waveformAsset.id}
           sourceStart={clip.sourceStart}
-          duration={clip.duration}
+          duration={clip.duration * clipSpeed(clip)}
+          reversed={isReversed(clip)}
           zoom={zoom}
         />
       )}
@@ -179,12 +179,14 @@ function ClipWaveform({
   assetId,
   sourceStart,
   duration,
+  reversed,
   zoom,
 }: {
   projectId: string;
   assetId: string;
   sourceStart: number;
   duration: number;
+  reversed: boolean;
   zoom: number;
 }) {
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -213,7 +215,7 @@ function ClipWaveform({
     context.setTransform(ratio, 0, 0, ratio, 0, 0);
     context.clearRect(0, 0, sampleWidth, height);
 
-    const peaks = sampleWaveform(envelope, sourceStart, duration, sampleWidth);
+    const peaks = sampleWaveform(envelope, sourceStart, duration, sampleWidth, reversed);
     const center = height / 2;
     const maxHalfHeight = height * 0.38;
     // dB scale: map linear 0..1 → dBFS → 0..1 over −48…0 dBFS range so

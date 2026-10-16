@@ -1,4 +1,4 @@
-import type { Asset, CutlineErrorJSON, Envelope, HistoryInfo, Project } from '@cutline/core';
+import type { Asset, CutlineErrorJSON, Envelope, HistoryInfo, Project, Word } from '@cutline/core';
 
 const TOKEN_KEY = 'cutline.token';
 

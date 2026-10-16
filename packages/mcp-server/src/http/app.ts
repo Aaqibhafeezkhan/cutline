@@ -419,10 +419,7 @@ export function createApp(services: Services): AppHandle {
   api.get(
     '/projects/:id/assets/:assetId/envelope',
     route(async (req, res) => {
-      const asset = findAsset(
-        (await docs.get(param(req, 'id'))).project,
-        param(req, 'assetId'),
-      );
+      const asset = findAsset((await docs.get(param(req, 'id'))).project, param(req, 'assetId'));
       const full = await services.analysis.envelope(asset);
       // Only peak is needed for waveform rendering; omitting rms halves payload size.
       const envelope = { windowSec: full.windowSec, peak: full.peak };

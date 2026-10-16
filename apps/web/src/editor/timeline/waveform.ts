@@ -2,10 +2,11 @@ import type { Envelope } from '@cutline/core';
 
 /** Samples a source-time slice into one peak value per output pixel. */
 export function sampleWaveform(
-  envelope: Envelope,
+  envelope: Pick<Envelope, 'windowSec' | 'peak'>,
   sourceStart: number,
   duration: number,
   pixelWidth: number,
+  reverse = false,
 ): number[] {
   if (
     !Number.isFinite(sourceStart) ||
@@ -21,7 +22,7 @@ export function sampleWaveform(
   }
 
   const width = Math.floor(pixelWidth);
-  return Array.from({ length: width }, (_, x) => {
+  const samples = Array.from({ length: width }, (_, x) => {
     const start = Math.max(0, sourceStart + (duration * x) / width);
     const end = Math.max(start, sourceStart + (duration * (x + 1)) / width);
     const first = Math.max(0, Math.floor(start / envelope.windowSec));
@@ -38,4 +39,5 @@ export function sampleWaveform(
     }
     return peak;
   });
+  return reverse ? samples.reverse() : samples;
 }
